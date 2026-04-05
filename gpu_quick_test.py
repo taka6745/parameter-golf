@@ -101,7 +101,10 @@ for step in range(50):
 
 avg_ms = sum(times[5:]) / len(times[5:])  # skip first 5 for stability
 avg_tok = batch * seq_len / (avg_ms / 1000)
-gpu_util = torch.cuda.utilization()
+try:
+    gpu_util = torch.cuda.utilization()
+except:
+    gpu_util = "N/A"
 
 print(f"\n=== RESULTS ===")
 print(f"Avg ms/step: {avg_ms:.1f}")
