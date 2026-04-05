@@ -280,6 +280,168 @@ print(f"  [drop_short] TOTAL: {total_steps} steps, eval_loss={eval_loss:.4f}", f
 results.append(("9. 90/10 + layer drop in short phase", eval_loss, total_steps))
 del model, optimizer; torch.cuda.empty_cache()
 
+# ============================================================
+# HAIL MARYS — weird combos, no theory, just vibes
+# ============================================================
+
+# 10. THE BLENDER: every trick at once
+# 4L/64seq/drop50%/bigbatch → 11L/128seq → 11L/1024seq/lowLR
+print("\n--- 10. THE BLENDER: everything combined ---")
+model = GPT(11).to(device).bfloat16()
+model.train()
+optimizer = torch.optim.AdamW(model.parameters(), lr=1e-3)
+for _ in range(3):
+    x = torch.randint(0, vocab, (batch, 1024), device=device)
+    loss = F.cross_entropy(model(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+    loss.backward(); optimizer.step(); optimizer.zero_grad()
+total_steps = 0; t_start = time.time()
+# Phase 1: CHAOS MODE — 4 layers, seq=64, batch=32, 60% of time
+phase_start = time.time()
+while (time.time() - phase_start) < 0.6 * TIME_BUDGET:
+    x = torch.randint(0, vocab, (32, 64), device=device)
+    h = model.embed(x)
+    for i in range(4):
+        if torch.rand(1).item() < 0.3: continue
+        h = model.blocks[i](h)
+    logits = model.head(model.norm(h))
+    loss = F.cross_entropy(logits[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+    loss.backward(); optimizer.step(); optimizer.zero_grad()
+    total_steps += 1
+    if total_steps % 1000 == 0:
+        print(f"  [blender] step {total_steps} loss={loss.item():.2f} elapsed={time.time()-t_start:.1f}s", flush=True)
+print(f"  [blender] chaos phase: {total_steps} steps in {time.time()-phase_start:.1f}s", flush=True)
+# Phase 2: SETTLE — full 11L, seq=128, 30% of time
+for pg in optimizer.param_groups: pg['lr'] = 3e-4
+phase_start = time.time(); p2 = 0
+while (time.time() - phase_start) < 0.3 * TIME_BUDGET:
+    x = torch.randint(0, vocab, (batch, 128), device=device)
+    loss = F.cross_entropy(model(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+    loss.backward(); optimizer.step(); optimizer.zero_grad()
+    total_steps += 1; p2 += 1
+    if total_steps % 500 == 0:
+        print(f"  [blender] step {total_steps} loss={loss.item():.2f} elapsed={time.time()-t_start:.1f}s", flush=True)
+print(f"  [blender] settle phase: {p2} steps", flush=True)
+# Phase 3: REFINE — full 11L, seq=1024, low LR, 10% of time
+for pg in optimizer.param_groups: pg['lr'] = 3e-5
+phase_start = time.time(); p3 = 0
+while (time.time() - phase_start) < 0.1 * TIME_BUDGET:
+    x = torch.randint(0, vocab, (batch, 1024), device=device)
+    loss = F.cross_entropy(model(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+    loss.backward(); optimizer.step(); optimizer.zero_grad()
+    total_steps += 1; p3 += 1
+print(f"  [blender] refine phase: {p3} steps", flush=True)
+eval_loss = evaluate(model)
+print(f"  [blender] TOTAL: {total_steps} steps, eval_loss={eval_loss:.4f}", flush=True)
+results.append(("10. THE BLENDER (chaos→settle→refine)", eval_loss, total_steps))
+del model, optimizer; torch.cuda.empty_cache()
+
+# 11. REVERSE CURRICULUM: start HARD (seq=1024) end EASY (seq=128)
+# Theory: learn structure first, then drill patterns
+print("\n--- 11. REVERSE: 10%@1024 first, then 90%@128 ---")
+l, s = run_timed("reverse", [(0.1, 1024, 11, None), (0.9, 128, 11, None)])
+results.append(("11. REVERSE 10/90 (1024→128)", l, s))
+
+# 12. OSCILLATOR: alternate seq=64 and seq=1024 every 30s
+print("\n--- 12. OSCILLATOR: alternate 64↔1024 every 30s ---")
+model = GPT(11).to(device).bfloat16()
+model.train()
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+for _ in range(3):
+    x = torch.randint(0, vocab, (batch, 1024), device=device)
+    loss = F.cross_entropy(model(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+    loss.backward(); optimizer.step(); optimizer.zero_grad()
+total_steps = 0; t_start = time.time()
+phase_idx = 0
+while (time.time() - t_start) < TIME_BUDGET:
+    seq = 64 if phase_idx % 2 == 0 else 1024
+    phase_start = time.time()
+    while (time.time() - phase_start) < 30:
+        x = torch.randint(0, vocab, (batch, seq), device=device)
+        loss = F.cross_entropy(model(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+        loss.backward(); optimizer.step(); optimizer.zero_grad()
+        total_steps += 1
+    print(f"  [oscillator] phase {phase_idx} seq={seq}: step {total_steps} loss={loss.item():.2f}", flush=True)
+    phase_idx += 1
+eval_loss = evaluate(model)
+print(f"  [oscillator] TOTAL: {total_steps} steps, eval_loss={eval_loss:.4f}", flush=True)
+results.append(("12. OSCILLATOR (64↔1024 every 30s)", eval_loss, total_steps))
+del model, optimizer; torch.cuda.empty_cache()
+
+# 13. DOUBLE MODEL: train 2 models on seq=128, average weights, finetune on 1024
+print("\n--- 13. DOUBLE MODEL: train 2 separate then merge ---")
+model_a = GPT(11).to(device).bfloat16()
+model_b = GPT(11).to(device).bfloat16()
+model_a.train(); model_b.train()
+opt_a = torch.optim.AdamW(model_a.parameters(), lr=3e-4)
+opt_b = torch.optim.AdamW(model_b.parameters(), lr=5e-4)  # different LR!
+for m, o in [(model_a, opt_a), (model_b, opt_b)]:
+    for _ in range(3):
+        x = torch.randint(0, vocab, (batch, 128), device=device)
+        loss = F.cross_entropy(m(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+        loss.backward(); o.step(); o.zero_grad()
+total_steps = 0; t_start = time.time()
+# Phase 1: train both on different seeds for 40% of time each
+for m, o, name, seed in [(model_a, opt_a, "A", 42), (model_b, opt_b, "B", 123)]:
+    torch.manual_seed(seed)
+    phase_start = time.time(); ps = 0
+    while (time.time() - phase_start) < 0.4 * TIME_BUDGET:
+        x = torch.randint(0, vocab, (batch, 128), device=device)
+        loss = F.cross_entropy(m(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+        loss.backward(); o.step(); o.zero_grad()
+        ps += 1; total_steps += 1
+    print(f"  [double] model {name}: {ps} steps loss={loss.item():.2f}", flush=True)
+# Merge weights (average)
+merged = GPT(11).to(device).bfloat16()
+with torch.no_grad():
+    for p_m, p_a, p_b in zip(merged.parameters(), model_a.parameters(), model_b.parameters()):
+        p_m.copy_((p_a + p_b) / 2)
+del model_a, model_b, opt_a, opt_b; torch.cuda.empty_cache()
+# Phase 2: finetune merged on seq=1024 for 20% of time
+merged.train()
+opt_merged = torch.optim.AdamW(merged.parameters(), lr=3e-5)
+phase_start = time.time(); ps = 0
+while (time.time() - phase_start) < 0.2 * TIME_BUDGET:
+    x = torch.randint(0, vocab, (batch, 1024), device=device)
+    loss = F.cross_entropy(merged(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+    loss.backward(); opt_merged.step(); opt_merged.zero_grad()
+    ps += 1; total_steps += 1
+print(f"  [double] merged finetune: {ps} steps loss={loss.item():.2f}", flush=True)
+eval_loss = evaluate(merged)
+print(f"  [double] TOTAL: {total_steps} steps, eval_loss={eval_loss:.4f}", flush=True)
+results.append(("13. DOUBLE MODEL merge + finetune", eval_loss, total_steps))
+del merged, opt_merged; torch.cuda.empty_cache()
+
+# 14. NOISE ANNEALING: add noise to weights early, remove late
+print("\n--- 14. NOISE ANNEALING: noisy weights early, clean late ---")
+model = GPT(11).to(device).bfloat16()
+model.train()
+optimizer = torch.optim.AdamW(model.parameters(), lr=3e-4)
+for _ in range(3):
+    x = torch.randint(0, vocab, (batch, 1024), device=device)
+    loss = F.cross_entropy(model(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+    loss.backward(); optimizer.step(); optimizer.zero_grad()
+total_steps = 0; t_start = time.time()
+while (time.time() - t_start) < TIME_BUDGET:
+    progress = (time.time() - t_start) / TIME_BUDGET
+    seq = 128 if progress < 0.9 else 1024
+    noise_scale = max(0, 0.1 * (1 - progress * 2))  # noise fades to 0 at 50%
+    x = torch.randint(0, vocab, (batch, seq), device=device)
+    # Add noise to weights
+    if noise_scale > 0:
+        with torch.no_grad():
+            for p in model.parameters():
+                if p.ndim >= 2:
+                    p.add_(torch.randn_like(p) * noise_scale * p.std())
+    loss = F.cross_entropy(model(x)[:, :-1].reshape(-1, vocab), x[:, 1:].reshape(-1))
+    loss.backward(); optimizer.step(); optimizer.zero_grad()
+    total_steps += 1
+    if total_steps % 500 == 0:
+        print(f"  [noise] step {total_steps} loss={loss.item():.2f} noise={noise_scale:.4f} seq={seq}", flush=True)
+eval_loss = evaluate(model)
+print(f"  [noise] TOTAL: {total_steps} steps, eval_loss={eval_loss:.4f}", flush=True)
+results.append(("14. NOISE ANNEALING + 90/10 seq", eval_loss, total_steps))
+del model, optimizer; torch.cuda.empty_cache()
+
 print("\n" + "=" * 85)
 print("RESULTS — sorted by eval loss (lower = better)")
 print("=" * 85)
