@@ -3,12 +3,9 @@
 # Hardware: any GPU with ≥10GB
 # Time: ~30 sec on 3080 Ti
 #
-# This test EXPECTS train_gpt.py to be patched with progressive seq support.
-# The patch script (chore/08) doesn't add progressive seq yet, so this test
-# will report SKIPPED instead of FAIL until that patch lands.
-#
-# When the patch is applied, this test runs train_gpt.py with PROGRESSIVE_SEQ=1
-# and a SHORT wallclock and verifies the phase transition log message appears.
+# Runs train_gpt.py with PROGRESSIVE_SEQ=1 and a SHORT wallclock.
+# Verifies that the PHASE TRANSITION log line is emitted, meaning the
+# patcher's progressive seq support is working.
 
 set -e
 [ -f .venv/bin/activate ] && source .venv/bin/activate || true
@@ -16,15 +13,14 @@ set -e
 echo "=== V04: PROGRESSIVE SEQ PHASE TRANSITION ==="
 echo
 
-# Skip cleanly if train_gpt.py doesn't support PROGRESSIVE_SEQ env var yet
+# Sanity check: train_gpt.py must have the patches
 if ! grep -q 'PROGRESSIVE_SEQ' train_gpt.py 2>/dev/null; then
-    echo "△ SKIP: train_gpt.py doesn't have progressive seq patches yet"
-    echo "  This test will pass once chore/08 (or a follow-up) adds progressive_seq support."
-    echo "  No-op for now."
-    exit 0
+    echo "✗ FAIL: train_gpt.py doesn't have progressive seq patches"
+    echo "  Run: bash runpod_tests/chore/08_patch_train_gpt.sh"
+    exit 1
 fi
 
-echo "Running 30s with progressive seq (25s @ seq=128, 5s @ seq=1024)..."
+echo "Running 30s with progressive seq (25.5s @ seq=128, 4.5s @ seq=1024)..."
 
 PROGRESSIVE_SEQ=1 \
 PHASE1_SEQ_LEN=128 \
