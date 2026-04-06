@@ -41,29 +41,27 @@ TRAIN_BATCH_TOKENS=8192 \
 GRAD_ACCUM_STEPS=8 \
 WARMUP_STEPS=10 \
 \
-TOKENIZER_PATH="./data/tokenizers/fineweb_8192_bpe.model" \
-DATA_PATH="./data/datasets/fineweb10B_bpe8192" \
-python3 train_gpt.py 2>&1 | tee /tmp/v10_full_stack.log
+python3 train_gpt.py 2>&1 | tee runpod_tests/logs/v10_full_stack.log
 
 echo
 echo "=== VALIDATION ==="
 
 # Check for crashes
-if grep -q 'Error\|Traceback\|RuntimeError' /tmp/v10_full_stack.log; then
+if grep -q 'Error\|Traceback\|RuntimeError' runpod_tests/logs/v10_full_stack.log; then
     echo "✗ FAIL: errors detected"
-    grep 'Error\|Traceback' /tmp/v10_full_stack.log | head -5
+    grep 'Error\|Traceback' runpod_tests/logs/v10_full_stack.log | head -5
     exit 1
 fi
 
 # Check for NaN
-if grep -q 'nan\|NaN\|inf\|Inf' /tmp/v10_full_stack.log; then
+if grep -q 'nan\|NaN\|inf\|Inf' runpod_tests/logs/v10_full_stack.log; then
     echo "✗ FAIL: NaN/Inf detected"
     exit 1
 fi
 
 # Check loss decreased
-INITIAL=$(grep 'step:' /tmp/v10_full_stack.log | grep -oE 'train_loss:[0-9.]+' | head -1 | cut -d: -f2)
-FINAL=$(grep 'step:' /tmp/v10_full_stack.log | grep -oE 'train_loss:[0-9.]+' | tail -1 | cut -d: -f2)
+INITIAL=$(grep 'step:' runpod_tests/logs/v10_full_stack.log | grep -oE 'train_loss:[0-9.]+' | head -1 | cut -d: -f2)
+FINAL=$(grep 'step:' runpod_tests/logs/v10_full_stack.log | grep -oE 'train_loss:[0-9.]+' | tail -1 | cut -d: -f2)
 echo "Loss: $INITIAL → $FINAL"
 
 if [ -z "$FINAL" ]; then

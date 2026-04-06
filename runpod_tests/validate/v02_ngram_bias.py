@@ -14,10 +14,20 @@ import numpy as np
 import sys
 
 
-VOCAB = 8192
-HASH_BUCKETS = 16384
+import os
 BATCH = 4
 SEQ_LEN = 128
+
+# Auto-detect which n-gram table exists (8192 or 1024)
+if os.path.exists("data/bigram_tab_8192v.npy"):
+    VOCAB = 8192
+    HASH_BUCKETS = 16384
+elif os.path.exists("data/bigram_tab_1024v.npy"):
+    VOCAB = 1024
+    HASH_BUCKETS = 2048
+else:
+    print("✗ No bigram table found. Run chore/04_build_ngrams.py first.")
+    sys.exit(1)
 
 
 def hash_bigram(prev):
@@ -32,16 +42,17 @@ def main():
     print("=== V02: N-GRAM BIAS FORWARD PASS ===\n")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
+    print(f"Vocab: {VOCAB}, hash buckets: {HASH_BUCKETS}")
 
-    # Load tables
+    # Load tables (auto-detected vocab)
     print("Loading n-gram tables...")
-    bigram = torch.from_numpy(np.load("data/bigram_tab_8192v.npy")).to(device)
-    trigram = torch.from_numpy(np.load("data/trigram_logprobs_8192v.npy")).to(device)
+    bigram = torch.from_numpy(np.load(f"data/bigram_tab_{VOCAB}v.npy")).to(device)
+    trigram = torch.from_numpy(np.load(f"data/trigram_logprobs_{VOCAB}v.npy")).to(device)
     print(f"  bigram: {bigram.shape}, dtype={bigram.dtype}")
     print(f"  trigram: {trigram.shape}, dtype={trigram.dtype}")
 
-    assert bigram.shape == (HASH_BUCKETS, VOCAB), f"Expected (16384, 8192), got {bigram.shape}"
-    assert trigram.shape == (HASH_BUCKETS, VOCAB), f"Expected (16384, 8192), got {trigram.shape}"
+    assert bigram.shape == (HASH_BUCKETS, VOCAB), f"Expected ({HASH_BUCKETS}, {VOCAB}), got {bigram.shape}"
+    assert trigram.shape == (HASH_BUCKETS, VOCAB), f"Expected ({HASH_BUCKETS}, {VOCAB}), got {trigram.shape}"
 
     # Simulate a forward pass
     print("\nSimulating forward pass...")

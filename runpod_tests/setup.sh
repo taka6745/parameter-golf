@@ -40,7 +40,8 @@ for pattern in \
     "$SCRIPT_DIR/chore/04_"*.py \
     "$SCRIPT_DIR/chore/05_"*.py \
     "$SCRIPT_DIR/chore/06_"*.py \
-    "$SCRIPT_DIR/chore/07_"*.sh; do
+    "$SCRIPT_DIR/chore/07_"*.sh \
+    "$SCRIPT_DIR/chore/08_"*.sh; do
     for script in $pattern; do
         if [ -f "$script" ]; then
             TESTS+=("$script")

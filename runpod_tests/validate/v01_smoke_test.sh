@@ -21,14 +21,14 @@ TRAIN_BATCH_TOKENS=8192 \
 GRAD_ACCUM_STEPS=8 \
 WARMUP_STEPS=10 \
 MAX_WALLCLOCK_SECONDS=0 \
-python3 train_gpt.py 2>&1 | tee /tmp/v01_smoke.log
+python3 train_gpt.py 2>&1 | tee runpod_tests/logs/v01_smoke.log
 
 # Check pass conditions
 echo
 echo "=== VALIDATION ==="
 
-LOSS_INITIAL=$(grep 'step:1\b' /tmp/v01_smoke.log | grep -oE 'train_loss:[0-9.]+' | head -1 | cut -d: -f2)
-LOSS_FINAL=$(grep 'step:50' /tmp/v01_smoke.log | grep -oE 'train_loss:[0-9.]+' | head -1 | cut -d: -f2)
+LOSS_INITIAL=$(grep 'step:1\b' runpod_tests/logs/v01_smoke.log | grep -oE 'train_loss:[0-9.]+' | head -1 | cut -d: -f2)
+LOSS_FINAL=$(grep 'step:50' runpod_tests/logs/v01_smoke.log | grep -oE 'train_loss:[0-9.]+' | head -1 | cut -d: -f2)
 
 echo "Initial loss: $LOSS_INITIAL"
 echo "Final loss:   $LOSS_FINAL"

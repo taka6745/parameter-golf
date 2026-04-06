@@ -31,13 +31,13 @@ TRAIN_LOG_EVERY=50 \
 TRAIN_BATCH_TOKENS=8192 \
 GRAD_ACCUM_STEPS=8 \
 WARMUP_STEPS=10 \
-python3 train_gpt.py 2>&1 | tee /tmp/v04_progressive.log
+python3 train_gpt.py 2>&1 | tee runpod_tests/logs/v04_progressive.log
 
 echo
 echo "=== VALIDATION ==="
 
 # Check that phase transition log appeared
-if grep -q "PHASE TRANSITION" /tmp/v04_progressive.log; then
+if grep -q "PHASE TRANSITION" runpod_tests/logs/v04_progressive.log; then
     echo "✓ Phase transition triggered"
 else
     echo "✗ Phase transition NOT triggered (check Patch C is applied)"
@@ -45,18 +45,18 @@ else
 fi
 
 # Check that Phase 1 reached more steps than Phase 2
-P1_STEPS=$(grep -c 'step:' /tmp/v04_progressive.log || echo 0)
+P1_STEPS=$(grep -c 'step:' runpod_tests/logs/v04_progressive.log || echo 0)
 echo "  Total step logs: $P1_STEPS"
 
 # Check no NaN
-if grep -q 'nan\|NaN\|inf\|Inf' /tmp/v04_progressive.log; then
+if grep -q 'nan\|NaN\|inf\|Inf' runpod_tests/logs/v04_progressive.log; then
     echo "✗ FAIL: NaN/Inf detected"
     exit 1
 fi
 
 # Check final loss is reasonable (decreased from initial)
-INITIAL_LOSS=$(grep 'step:1\b' /tmp/v04_progressive.log | grep -oE 'train_loss:[0-9.]+' | head -1 | cut -d: -f2)
-FINAL_LOSS=$(grep 'step:' /tmp/v04_progressive.log | grep -oE 'train_loss:[0-9.]+' | tail -1 | cut -d: -f2)
+INITIAL_LOSS=$(grep 'step:1\b' runpod_tests/logs/v04_progressive.log | grep -oE 'train_loss:[0-9.]+' | head -1 | cut -d: -f2)
+FINAL_LOSS=$(grep 'step:' runpod_tests/logs/v04_progressive.log | grep -oE 'train_loss:[0-9.]+' | tail -1 | cut -d: -f2)
 echo "  Loss: $INITIAL_LOSS → $FINAL_LOSS"
 
 if [ -n "$FINAL_LOSS" ] && (( $(echo "$FINAL_LOSS < $INITIAL_LOSS" | bc -l) )); then

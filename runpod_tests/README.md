@@ -19,8 +19,39 @@ cd /workspace/paramgolf/runpod_tests
 ./setup.sh          # data prep, tokenizer, n-grams         → logs/setup.log
 ./validate.sh       # confirm code runs, no NaN            → logs/validate.log
 ./unknown.sh        # the actual research                  → logs/unknown.log
+./results.sh        # aggregate all training runs           → logs/results.json
 ./export_logs.sh    # uploads logs and prints download URLs
 ```
+
+## Where the data lives
+
+| File | What |
+|---|---|
+| `logs/setup.log` | summary of all chore scripts + their stdout |
+| `logs/validate.log` | summary of all validate scripts + their stdout |
+| `logs/unknown.log` | summary of all unknown scripts + their stdout |
+| `logs/v01_smoke.log` | raw train_gpt.py output for v01 smoke test |
+| `logs/v04_progressive.log` | raw output for v04 progressive seq |
+| `logs/v10_full_stack.log` | raw output for v10 full stack |
+| `logs/u01/config_*.log` | raw output for each architecture in u01 |
+| `logs/u02/run_*.log` | u02 progressive seq A/B logs |
+| `logs/u03/run_*.log` | u03 eval cache A/B logs |
+| `logs/u04/full_stack.log` | u04 full stack run |
+| `logs/u05/seed_*.log` | u05 3-seed final runs |
+| `logs/u06/`, `logs/u07/`, `logs/u08/`, `logs/u09/`, `logs/u10/` | per-test artifacts |
+| `logs/results.json` | **aggregated** run data (val_bpb, train_loss curves, ms/step, etc.) |
+
+`results.sh` parses every `.log` file in `logs/` and extracts:
+- Final val_bpb (both raw and after int8+zlib)
+- Train loss curve (every logged step)
+- ms/step
+- Tokens/sec
+- Architecture config (layers, heads, dims, batch, etc.)
+- Artifact size in bytes
+- GPU model
+
+It writes a single `logs/results.json` you can grep / pipe to jq, plus prints
+a top-20 leaderboard sorted by val_bpb.
 
 Or chain everything in one command (~5 hrs, ~$1 on a 3060):
 ```bash
