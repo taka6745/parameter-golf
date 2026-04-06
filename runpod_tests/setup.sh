@@ -2,16 +2,16 @@
 # setup.sh — Run all chore tests, output to logs/setup.log
 # Usage: ./setup.sh
 
-set -u  # don't exit on test failure (let later tests still run)
+set -u
 
-# Always run from repo root so relative paths work
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$REPO_ROOT"
+# Resolve paths once
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"      # .../runpod_tests
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"        # .../paramgolf
 
 # Source venv if it exists (so child processes pick up the right Python)
-if [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
+if [ -d "$REPO_ROOT/.venv" ] && [ -f "$REPO_ROOT/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "$REPO_ROOT/.venv/bin/activate"
 fi
 
 LOG_DIR="$SCRIPT_DIR/logs"
@@ -22,20 +22,40 @@ mkdir -p "$LOG_DIR"
 {
     echo "================================================================================"
     echo "SETUP RUN — $(date)"
-    echo "Host: $(hostname)"
-    echo "GPU:  $(python3 -c 'import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print("none")' 2>/dev/null || echo 'unknown')"
+    echo "Host:       $(hostname)"
+    echo "Repo:       $REPO_ROOT"
+    echo "Tests dir:  $SCRIPT_DIR"
+    echo "GPU:        $(python3 -c 'import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print("none")' 2>/dev/null || echo 'unknown')"
     echo "================================================================================"
     echo
 } > "$LOG_FILE"
 
-# Test runner
+# Build list of tests (absolute paths) — must do this BEFORE cd elsewhere
+TESTS=()
+for pattern in \
+    "$SCRIPT_DIR/chore/00_"*.sh \
+    "$SCRIPT_DIR/chore/01_"*.sh \
+    "$SCRIPT_DIR/chore/02_"*.sh \
+    "$SCRIPT_DIR/chore/03_"*.sh \
+    "$SCRIPT_DIR/chore/04_"*.py \
+    "$SCRIPT_DIR/chore/05_"*.py \
+    "$SCRIPT_DIR/chore/06_"*.py \
+    "$SCRIPT_DIR/chore/07_"*.sh; do
+    for script in $pattern; do
+        if [ -f "$script" ]; then
+            TESTS+=("$script")
+        fi
+    done
+done
+
 PASS=0
 FAIL=0
 FAILED_TESTS=()
 
 run_test() {
     local script=$1
-    local name=$(basename "$script" | sed 's/\.[^.]*$//')
+    local name
+    name=$(basename "$script" | sed 's/\.[^.]*$//')
 
     echo
     echo "================================================================================"
@@ -43,20 +63,22 @@ run_test() {
     echo ">>> TIME: $(date '+%H:%M:%S')"
     echo "================================================================================"
 
-    local start=$(date +%s)
+    local start
+    start=$(date +%s)
     local exit_code=0
 
-    # Each test runs from REPO_ROOT so its relative paths (data/, .venv/) work
+    # Each test runs from REPO_ROOT so its relative paths (data/, train_gpt.py) work
     cd "$REPO_ROOT"
     if [[ "$script" == *.py ]]; then
-        python3 "$SCRIPT_DIR/$script" 2>&1
+        python3 "$script" 2>&1
         exit_code=$?
     else
-        bash "$SCRIPT_DIR/$script" 2>&1
+        bash "$script" 2>&1
         exit_code=$?
     fi
 
-    local end=$(date +%s)
+    local end
+    end=$(date +%s)
     local duration=$((end - start))
 
     echo
@@ -71,12 +93,16 @@ run_test() {
     echo "================================================================================"
 }
 
-# Run all tests in chore/, in order
+# Run all tests
 {
-    for script in chore/00_*.sh chore/01_*.sh chore/02_*.sh chore/03_*.sh chore/04_*.py chore/05_*.py chore/06_*.py chore/07_*.sh; do
-        if [ -f "$SCRIPT_DIR/$script" ]; then
-            run_test "$script"
-        fi
+    if [ ${#TESTS[@]} -eq 0 ]; then
+        echo "✗ NO TESTS FOUND in $SCRIPT_DIR/chore/"
+        echo "  ls $SCRIPT_DIR/chore/:"
+        ls "$SCRIPT_DIR/chore/" 2>&1 || echo "  (directory does not exist)"
+    fi
+
+    for script in "${TESTS[@]}"; do
+        run_test "$script"
     done
 
     # Summary
@@ -85,6 +111,7 @@ run_test() {
     echo "SETUP SUMMARY"
     echo "================================================================================"
     echo "TIME:    $(date)"
+    echo "TESTS:   ${#TESTS[@]}"
     echo "PASSED:  $PASS"
     echo "FAILED:  $FAIL"
     if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
@@ -94,7 +121,9 @@ run_test() {
         done
     fi
     echo
-    if [ $FAIL -eq 0 ]; then
+    if [ ${#TESTS[@]} -eq 0 ]; then
+        echo "STATUS: NO TESTS RAN — check $SCRIPT_DIR/chore/ exists"
+    elif [ $FAIL -eq 0 ]; then
         echo "STATUS: ALL CHORES COMPLETE — proceed to ./validate.sh"
     else
         echo "STATUS: $FAIL CHORE(S) FAILED — fix before proceeding"

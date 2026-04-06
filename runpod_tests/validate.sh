@@ -4,14 +4,12 @@
 
 set -u
 
-# Always run from repo root so relative paths work
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$REPO_ROOT"
 
-# Source venv if it exists
-if [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
+if [ -d "$REPO_ROOT/.venv" ] && [ -f "$REPO_ROOT/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "$REPO_ROOT/.venv/bin/activate"
 fi
 
 LOG_DIR="$SCRIPT_DIR/logs"
@@ -21,11 +19,33 @@ mkdir -p "$LOG_DIR"
 {
     echo "================================================================================"
     echo "VALIDATE RUN — $(date)"
-    echo "Host: $(hostname)"
-    echo "GPU:  $(python3 -c 'import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print("none")' 2>/dev/null || echo 'unknown')"
+    echo "Host:       $(hostname)"
+    echo "Repo:       $REPO_ROOT"
+    echo "Tests dir:  $SCRIPT_DIR"
+    echo "GPU:        $(python3 -c 'import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print("none")' 2>/dev/null || echo 'unknown')"
     echo "================================================================================"
     echo
 } > "$LOG_FILE"
+
+# Build absolute test list
+TESTS=()
+for pattern in \
+    "$SCRIPT_DIR/validate/v01_"*.sh \
+    "$SCRIPT_DIR/validate/v02_"*.py \
+    "$SCRIPT_DIR/validate/v03_"*.py \
+    "$SCRIPT_DIR/validate/v04_"*.sh \
+    "$SCRIPT_DIR/validate/v05_"*.py \
+    "$SCRIPT_DIR/validate/v06_"*.py \
+    "$SCRIPT_DIR/validate/v07_"*.py \
+    "$SCRIPT_DIR/validate/v08_"*.py \
+    "$SCRIPT_DIR/validate/v09_"*.py \
+    "$SCRIPT_DIR/validate/v10_"*.sh; do
+    for script in $pattern; do
+        if [ -f "$script" ]; then
+            TESTS+=("$script")
+        fi
+    done
+done
 
 PASS=0
 FAIL=0
@@ -33,7 +53,8 @@ FAILED_TESTS=()
 
 run_test() {
     local script=$1
-    local name=$(basename "$script" | sed 's/\.[^.]*$//')
+    local name
+    name=$(basename "$script" | sed 's/\.[^.]*$//')
 
     echo
     echo "================================================================================"
@@ -41,19 +62,21 @@ run_test() {
     echo ">>> TIME: $(date '+%H:%M:%S')"
     echo "================================================================================"
 
-    local start=$(date +%s)
+    local start
+    start=$(date +%s)
     local exit_code=0
 
     cd "$REPO_ROOT"
     if [[ "$script" == *.py ]]; then
-        python3 "$SCRIPT_DIR/$script" 2>&1
+        python3 "$script" 2>&1
         exit_code=$?
     else
-        bash "$SCRIPT_DIR/$script" 2>&1
+        bash "$script" 2>&1
         exit_code=$?
     fi
 
-    local end=$(date +%s)
+    local end
+    end=$(date +%s)
     local duration=$((end - start))
 
     echo
@@ -69,13 +92,14 @@ run_test() {
 }
 
 {
-    # Run all v01-v10 in order
-    for script in validate/v01*.sh validate/v02*.py validate/v03*.py validate/v04*.sh \
-                  validate/v05*.py validate/v06*.py validate/v07*.py validate/v08*.py \
-                  validate/v09*.py validate/v10*.sh; do
-        if [ -f "$SCRIPT_DIR/$script" ]; then
-            run_test "$script"
-        fi
+    if [ ${#TESTS[@]} -eq 0 ]; then
+        echo "✗ NO TESTS FOUND in $SCRIPT_DIR/validate/"
+        echo "  ls $SCRIPT_DIR/validate/:"
+        ls "$SCRIPT_DIR/validate/" 2>&1 || echo "  (directory does not exist)"
+    fi
+
+    for script in "${TESTS[@]}"; do
+        run_test "$script"
     done
 
     echo
@@ -83,6 +107,7 @@ run_test() {
     echo "VALIDATE SUMMARY"
     echo "================================================================================"
     echo "TIME:    $(date)"
+    echo "TESTS:   ${#TESTS[@]}"
     echo "PASSED:  $PASS"
     echo "FAILED:  $FAIL"
     if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
@@ -92,7 +117,9 @@ run_test() {
         done
     fi
     echo
-    if [ $FAIL -eq 0 ]; then
+    if [ ${#TESTS[@]} -eq 0 ]; then
+        echo "STATUS: NO TESTS RAN — check $SCRIPT_DIR/validate/ exists"
+    elif [ $FAIL -eq 0 ]; then
         echo "STATUS: ALL VALIDATIONS PASSED — proceed to ./unknown.sh"
     else
         echo "STATUS: $FAIL VALIDATION(S) FAILED — debug before unknown/"

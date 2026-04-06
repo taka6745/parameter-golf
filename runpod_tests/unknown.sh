@@ -1,19 +1,15 @@
 #!/bin/bash
 # unknown.sh — Run all unknown tests, output to logs/unknown.log
 # Usage: ./unknown.sh [u01 u02 ... uNN]
-# If no args: runs all unknown tests in order
-# If args: runs only specified tests
 
 set -u
 
-# Always run from repo root so relative paths work
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-cd "$REPO_ROOT"
 
-# Source venv if it exists
-if [ -d ".venv" ] && [ -f ".venv/bin/activate" ]; then
-    source .venv/bin/activate
+if [ -d "$REPO_ROOT/.venv" ] && [ -f "$REPO_ROOT/.venv/bin/activate" ]; then
+    # shellcheck disable=SC1091
+    source "$REPO_ROOT/.venv/bin/activate"
 fi
 
 LOG_DIR="$SCRIPT_DIR/logs"
@@ -23,9 +19,11 @@ mkdir -p "$LOG_DIR"
 {
     echo "================================================================================"
     echo "UNKNOWN RUN — $(date)"
-    echo "Host: $(hostname)"
-    echo "GPU:  $(python3 -c 'import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print("none")' 2>/dev/null || echo 'unknown')"
-    echo "VRAM: $(python3 -c 'import torch; print(f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB") if torch.cuda.is_available() else print("none")' 2>/dev/null || echo 'unknown')"
+    echo "Host:       $(hostname)"
+    echo "Repo:       $REPO_ROOT"
+    echo "Tests dir:  $SCRIPT_DIR"
+    echo "GPU:        $(python3 -c 'import torch; print(torch.cuda.get_device_name(0)) if torch.cuda.is_available() else print("none")' 2>/dev/null || echo 'unknown')"
+    echo "VRAM:       $(python3 -c 'import torch; print(f"{torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB") if torch.cuda.is_available() else print("none")' 2>/dev/null || echo 'unknown')"
     echo "================================================================================"
     echo
     echo "WARNING: Running unknown/ tests on a non-H100 GPU will give different"
@@ -34,6 +32,35 @@ mkdir -p "$LOG_DIR"
     echo
 } > "$LOG_FILE"
 
+# Build absolute test list — either from args or default order
+TESTS=()
+if [ $# -gt 0 ]; then
+    for arg in "$@"; do
+        for script in "$SCRIPT_DIR/unknown/${arg}"*.sh; do
+            if [ -f "$script" ]; then
+                TESTS+=("$script")
+            fi
+        done
+    done
+else
+    # Default order: arch, speed, GLA chain, progressive, cache, full, 3-seed
+    for pattern in \
+        "$SCRIPT_DIR/unknown/u01_"*.sh \
+        "$SCRIPT_DIR/unknown/u06_"*.sh \
+        "$SCRIPT_DIR/unknown/u07_"*.sh \
+        "$SCRIPT_DIR/unknown/u08_"*.sh \
+        "$SCRIPT_DIR/unknown/u02_"*.sh \
+        "$SCRIPT_DIR/unknown/u03_"*.sh \
+        "$SCRIPT_DIR/unknown/u04_"*.sh \
+        "$SCRIPT_DIR/unknown/u05_"*.sh; do
+        for script in $pattern; do
+            if [ -f "$script" ]; then
+                TESTS+=("$script")
+            fi
+        done
+    done
+fi
+
 PASS=0
 FAIL=0
 FAILED_TESTS=()
@@ -41,7 +68,8 @@ RESULTS=()
 
 run_test() {
     local script=$1
-    local name=$(basename "$script" | sed 's/\.[^.]*$//')
+    local name
+    name=$(basename "$script" | sed 's/\.[^.]*$//')
 
     echo
     echo "================================================================================"
@@ -49,14 +77,16 @@ run_test() {
     echo ">>> TIME: $(date '+%H:%M:%S')"
     echo "================================================================================"
 
-    local start=$(date +%s)
+    local start
+    start=$(date +%s)
     local exit_code=0
 
     cd "$REPO_ROOT"
-    bash "$SCRIPT_DIR/$script" 2>&1
+    bash "$script" 2>&1
     exit_code=$?
 
-    local end=$(date +%s)
+    local end
+    end=$(date +%s)
     local duration=$((end - start))
 
     echo
@@ -73,54 +103,42 @@ run_test() {
     echo "================================================================================"
 }
 
-# If args provided, run only those. Otherwise run all in order.
-if [ $# -gt 0 ]; then
-    {
-        echo "Running specific tests: $@"
-        echo
-        for arg in "$@"; do
-            for script in unknown/${arg}*.sh; do
-                if [ -f "$SCRIPT_DIR/$script" ]; then
-                    run_test "$script"
-                fi
-            done
-        done
-    } 2>&1 | tee -a "$LOG_FILE"
-else
-    {
-        echo "Running all unknown tests in order"
-        echo
-        # Order: u01 (arch), u06 (speed), u07/u08 (GLA chain), u02 (progressive), u03 (cache), u04 (full), u05 (3-seed)
-        for script in unknown/u01*.sh unknown/u06*.sh unknown/u07*.sh unknown/u08*.sh \
-                      unknown/u02*.sh unknown/u03*.sh unknown/u04*.sh unknown/u05*.sh; do
-            if [ -f "$SCRIPT_DIR/$script" ]; then
-                run_test "$script"
-            fi
-        done
-    } 2>&1 | tee -a "$LOG_FILE"
-fi
-
-# Summary
 {
+    if [ ${#TESTS[@]} -eq 0 ]; then
+        echo "✗ NO TESTS FOUND in $SCRIPT_DIR/unknown/"
+        echo "  args: $*"
+        echo "  ls $SCRIPT_DIR/unknown/:"
+        ls "$SCRIPT_DIR/unknown/" 2>&1 || echo "  (directory does not exist)"
+    fi
+
+    for script in "${TESTS[@]}"; do
+        run_test "$script"
+    done
+
+    # Summary
     echo
     echo "================================================================================"
     echo "UNKNOWN SUMMARY"
     echo "================================================================================"
     echo "TIME:    $(date)"
+    echo "TESTS:   ${#TESTS[@]}"
     echo "PASSED:  $PASS"
     echo "FAILED:  $FAIL"
     echo
-    echo "RESULTS:"
-    for r in "${RESULTS[@]}"; do
-        echo "  $r"
-    done
+    if [ ${#RESULTS[@]} -gt 0 ]; then
+        echo "RESULTS:"
+        for r in "${RESULTS[@]}"; do
+            echo "  $r"
+        done
+    fi
 
     # Extract any val_bpb scores found in logs
     echo
     echo "VAL_BPB SCORES (if any):"
-    if [ -d "logs" ]; then
-        find logs -name "*.log" -exec grep -H 'final_int8_zlib_roundtrip val_loss' {} \; 2>/dev/null | \
-            grep -oE 'logs/[^:]*|val_bpb:[0-9.]+' | paste - - | head -20 || echo "  (none yet)"
+    if [ -d "$REPO_ROOT/logs" ]; then
+        find "$REPO_ROOT/logs" -name "*.log" -exec grep -H 'final_int8_zlib_roundtrip val_loss' {} \; 2>/dev/null | head -20 || echo "  (none yet)"
+    else
+        echo "  (no logs/ dir yet)"
     fi
 
     if [ ${#FAILED_TESTS[@]} -gt 0 ]; then
