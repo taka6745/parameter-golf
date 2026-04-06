@@ -111,15 +111,13 @@ cd /workspace
 git clone https://github.com/taka6745/paramgolf.git
 cd paramgolf
 
-# 3. Python venv
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
+# 3. Python deps (use system torch from RunPod base image, install everything else)
+pip install sentencepiece huggingface_hub datasets tqdm zstandard brotli scikit-learn
 
-# 4. Python deps
-pip install 'torch>=2.4.0' sentencepiece numpy
-pip install huggingface_hub datasets tqdm
-pip install zstandard brotli scikit-learn
+# Only create a venv if system torch doesn't work:
+# python3 -m venv .venv --system-site-packages
+# source .venv/bin/activate
+# pip install torch --index-url https://download.pytorch.org/whl/cu124
 
 # 5. Verify CUDA
 python3 -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0))"

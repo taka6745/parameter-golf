@@ -8,7 +8,7 @@
 
 set -e
 cd /workspace/paramgolf
-source .venv/bin/activate
+[ -f .venv/bin/activate ] && source .venv/bin/activate || true
 
 echo "=========================================="
 echo "U04: FULL STACK SINGLE SEED"

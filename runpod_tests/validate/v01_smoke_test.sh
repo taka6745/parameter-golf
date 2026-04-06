@@ -7,7 +7,7 @@
 
 set -e
 cd /workspace/paramgolf
-source .venv/bin/activate
+[ -f .venv/bin/activate ] && source .venv/bin/activate || true
 
 echo "=== V01: SMOKE TEST (base train_gpt.py) ==="
 echo

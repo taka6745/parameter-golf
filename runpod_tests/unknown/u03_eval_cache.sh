@@ -12,7 +12,7 @@
 
 set -e
 cd /workspace/paramgolf
-source .venv/bin/activate
+[ -f .venv/bin/activate ] && source .venv/bin/activate || true
 
 echo "=========================================="
 echo "U03: EVAL N-GRAM CACHE"

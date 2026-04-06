@@ -8,7 +8,7 @@
 
 set -e
 cd /workspace/paramgolf
-source .venv/bin/activate
+[ -f .venv/bin/activate ] && source .venv/bin/activate || true
 
 echo "=== V10: FULL STACK SMOKE TEST ==="
 echo

@@ -9,7 +9,7 @@
 
 set -e
 cd /workspace/paramgolf
-source .venv/bin/activate
+[ -f .venv/bin/activate ] && source .venv/bin/activate || true
 
 echo "=========================================="
 echo "U05: 3-SEED FINAL ON 8xH100"

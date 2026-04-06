@@ -19,7 +19,7 @@
 
 set -e
 cd /workspace/paramgolf
-source .venv/bin/activate
+[ -f .venv/bin/activate ] && source .venv/bin/activate || true
 
 echo "=========================================="
 echo "U08: GLA + PROGRESSIVE SEQ COMBINED"
