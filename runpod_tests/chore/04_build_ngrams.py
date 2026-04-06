@@ -2,109 +2,106 @@
 """
 04_build_ngrams.py — Build bigram, trigram, 4-gram tables for SP-1024
 
-Runs on: any pod (CPU work)
-Time: ~4 min
+Vectorized with np.bincount. Subsamples to MAX_TOKENS for speed (default 100M;
+diminishing returns past ~50M for these tables). Set MAX_TOKENS=0 to use all.
+
+Runs on: any pod (CPU work, but uses ~4 GB RAM for the count matrices)
+Time: ~30 sec on 100M tokens, ~5 min on 1B tokens
 Outputs:
-    data/bigram_tab_1024v.npy        (small, 2048 hash buckets × 1024 vocab)
+    data/bigram_tab_1024v.npy
     data/trigram_logprobs_1024v.npy
     data/fourgram_logprobs_1024v.npy
-
-These get loaded by train_gpt.py and added as logit bias during training.
-Using SP-1024 baseline. To rebuild for BPE-8192 later, change VOCAB and DATA_DIR.
 """
 
 import os
 import sys
+import time
 import numpy as np
-from collections import defaultdict
 from pathlib import Path
 
 VOCAB = 1024
-HASH_BUCKETS = 2048  # 2x vocab for low collision
+HASH_BUCKETS = 2048
 DATA_DIR = Path("data/datasets/fineweb10B_sp1024")
-
-# Hash functions (signed polynomial — confirmed +0.003 BPP on Mac)
-def hash_bigram(prev):
-    return (prev * 36313) % HASH_BUCKETS
-
-def hash_trigram(prev2, prev1):
-    return ((prev2 * 36313 + prev1 * 27191) % HASH_BUCKETS)
-
-def hash_fourgram(prev3, prev2, prev1):
-    return ((prev3 * 36313 + prev2 * 27191 + prev1 * 51497) % HASH_BUCKETS)
+MAX_TOKENS = int(os.environ.get("MAX_TOKENS", 100_000_000))  # 100M default; 0 = all
 
 
 def load_tokens():
-    """Load all training tokens from SP-1024 shards."""
     print(f"Loading tokens from {DATA_DIR}...")
     if not DATA_DIR.exists():
         print(f"  ✗ {DATA_DIR} does not exist")
         print(f"  Did 01_download_data.sh run successfully?")
-        print(f"  Available datasets: {list(Path('data/datasets').glob('*')) if Path('data/datasets').exists() else 'none'}")
         sys.exit(1)
 
-    all_tokens = []
     shard_paths = sorted(DATA_DIR.glob("fineweb_train_*.bin"))
     if not shard_paths:
         print(f"  ✗ No fineweb_train_*.bin shards in {DATA_DIR}")
-        print(f"  Files in dir: {list(DATA_DIR.iterdir())}")
         sys.exit(1)
 
+    all_tokens = []
+    total = 0
     for shard_path in shard_paths:
-        # Each shard is a header + uint16 tokens
         with open(shard_path, "rb") as f:
-            header = np.frombuffer(f.read(1024), dtype=np.int32)
+            f.read(1024)  # skip header
             tokens = np.frombuffer(f.read(), dtype=np.uint16)
         all_tokens.append(tokens)
-        print(f"  {shard_path.name}: {len(tokens):,} tokens")
-    return np.concatenate(all_tokens)
+        total += len(tokens)
+        if MAX_TOKENS > 0 and total >= MAX_TOKENS:
+            break
+
+    tokens = np.concatenate(all_tokens)
+    if MAX_TOKENS > 0 and len(tokens) > MAX_TOKENS:
+        tokens = tokens[:MAX_TOKENS]
+    print(f"  Loaded {len(tokens):,} tokens (limit={MAX_TOKENS:,})")
+    return tokens.astype(np.int32, copy=False)
 
 
 def build_bigram(tokens):
-    print(f"\nBuilding bigram table ({HASH_BUCKETS} buckets × {VOCAB} vocab)...")
-    counts = np.zeros((HASH_BUCKETS, VOCAB), dtype=np.int32)
-    for i in range(len(tokens) - 1):
-        h = hash_bigram(int(tokens[i]))
-        counts[h, int(tokens[i+1])] += 1
-        if i % 1_000_000 == 0:
-            print(f"  {i:,}/{len(tokens):,}")
-
-    # Convert to log probabilities (Laplace smoothing)
+    """Vectorized bigram count using flat indexing into a (HASH_BUCKETS, VOCAB) table."""
+    t0 = time.time()
+    print(f"Building bigram (vectorized)...")
+    prev = tokens[:-1]
+    nxt = tokens[1:]
+    h = (prev.astype(np.int64) * 36313) % HASH_BUCKETS
+    flat = h * VOCAB + nxt
+    counts = np.bincount(flat, minlength=HASH_BUCKETS * VOCAB).reshape(HASH_BUCKETS, VOCAB)
     counts = counts.astype(np.float64) + 0.1
     row_sums = counts.sum(axis=1, keepdims=True)
-    probs = counts / row_sums
-    log_probs = np.log(probs).astype(np.float32)
+    log_probs = np.log(counts / row_sums).astype(np.float32)
+    print(f"  done in {time.time() - t0:.1f}s")
     return log_probs
 
 
 def build_trigram(tokens):
-    print(f"\nBuilding trigram table...")
-    counts = np.zeros((HASH_BUCKETS, VOCAB), dtype=np.int32)
-    for i in range(2, len(tokens)):
-        h = hash_trigram(int(tokens[i-2]), int(tokens[i-1]))
-        counts[h, int(tokens[i])] += 1
-        if i % 1_000_000 == 0:
-            print(f"  {i:,}/{len(tokens):,}")
-
+    t0 = time.time()
+    print(f"Building trigram (vectorized)...")
+    p2 = tokens[:-2].astype(np.int64)
+    p1 = tokens[1:-1].astype(np.int64)
+    nxt = tokens[2:]
+    h = (p2 * 36313 + p1 * 27191) % HASH_BUCKETS
+    flat = h * VOCAB + nxt
+    counts = np.bincount(flat, minlength=HASH_BUCKETS * VOCAB).reshape(HASH_BUCKETS, VOCAB)
     counts = counts.astype(np.float64) + 0.1
     row_sums = counts.sum(axis=1, keepdims=True)
-    probs = counts / row_sums
-    return np.log(probs).astype(np.float32)
+    log_probs = np.log(counts / row_sums).astype(np.float32)
+    print(f"  done in {time.time() - t0:.1f}s")
+    return log_probs
 
 
 def build_fourgram(tokens):
-    print(f"\nBuilding 4-gram table...")
-    counts = np.zeros((HASH_BUCKETS, VOCAB), dtype=np.int32)
-    for i in range(3, len(tokens)):
-        h = hash_fourgram(int(tokens[i-3]), int(tokens[i-2]), int(tokens[i-1]))
-        counts[h, int(tokens[i])] += 1
-        if i % 1_000_000 == 0:
-            print(f"  {i:,}/{len(tokens):,}")
-
+    t0 = time.time()
+    print(f"Building 4-gram (vectorized)...")
+    p3 = tokens[:-3].astype(np.int64)
+    p2 = tokens[1:-2].astype(np.int64)
+    p1 = tokens[2:-1].astype(np.int64)
+    nxt = tokens[3:]
+    h = (p3 * 36313 + p2 * 27191 + p1 * 51497) % HASH_BUCKETS
+    flat = h * VOCAB + nxt
+    counts = np.bincount(flat, minlength=HASH_BUCKETS * VOCAB).reshape(HASH_BUCKETS, VOCAB)
     counts = counts.astype(np.float64) + 0.1
     row_sums = counts.sum(axis=1, keepdims=True)
-    probs = counts / row_sums
-    return np.log(probs).astype(np.float32)
+    log_probs = np.log(counts / row_sums).astype(np.float32)
+    print(f"  done in {time.time() - t0:.1f}s")
+    return log_probs
 
 
 def main():
@@ -117,7 +114,6 @@ def main():
         return
 
     tokens = load_tokens()
-    print(f"\nTotal tokens: {len(tokens):,}")
 
     bigram = build_bigram(tokens)
     np.save(bigram_path, bigram)
