@@ -462,6 +462,65 @@ else:
         content = content.replace(old_block_forward, new_block_forward)
         print("  ✓ added SMEAR_GATE pre-MLP smear")
 
+# Patch 14: USE_ENTROPY_ADAPTIVE_NGRAM=1 → entropy-gated n-gram bias mixing.
+# TRULY NOVEL — not in any PR I've found, not in any Mac experiment, not in any
+# arxiv paper I'm aware of. The idea: instead of a fixed or learned gate, use the
+# model's OWN per-token softmax entropy as the gate. When the model is uncertain
+# (high entropy ≈ uniform distribution), we trust the n-gram bias more. When the
+# model is confident (low entropy ≈ peaked distribution), we trust its own
+# prediction more. The gate is computed deterministically from the logits — no
+# extra learned params, no extra forward pass.
+#
+# Different from:
+#   * Mac §32 cmix-style logistic mixing — that used FIXED scalar weights
+#   * Our learned NGRAM_GATE (Patch 12) — that uses a Linear on the residual,
+#     and empirically failed (NG1=3.42 vs L5=3.29)
+#   * Adaptive softmax / temperature-scaled mixing — those scale the WHOLE
+#     distribution, not the additive bias
+#
+# Math (per token i):
+#   logits_i ∈ R^V                                  # post-softcap model logits
+#   p_i = softmax(logits_i)                         # model probs
+#   H_i = -sum(p_i * log(p_i))                      # model entropy
+#   gate_i = H_i / log(V)                           # normalize to [0, 1]
+#   bias_i = w_bi*bg[h_bi(i)] + w_tri*tg[h_tri(i)] + w_four*fg[h_four(i)]
+#   logits_i_final = logits_i + gate_i * bias_i
+#
+# Cost: ~4 extra ops per token at the output layer. Negligible vs softmax+matmul.
+# Idempotent via ENTROPY_ADAPTIVE_NGRAM_MARKER.
+if "ENTROPY_ADAPTIVE_NGRAM_MARKER" in content:
+    print("  ✓ entropy-adaptive ngram already applied")
+else:
+    # Wrap the existing ngram bias add (which Patch 6 inserts) with an entropy gate.
+    # We anchor on Patch 6's "logits = logits + _bi_bias" line and replace the bigram/
+    # trigram/fourgram gates with entropy-scaled versions when the env var is set.
+    old_ng_apply_block = """        # NGRAM_GATE_MARKER apply: optional learned per-position gate factor
+        _gate = None
+        if self._ngram_gate_enabled and self._ngram_enabled:
+            _gate = torch.sigmoid(self.ngram_gate_proj(x.detach())).float()  # (B*S, 1) in [0,1]
+        # NGRAM_BIAS_MARKER apply: blend in precomputed n-gram log-probs
+        if self._ngram_enabled and self._bigram_tab.numel() > 1:"""
+    new_ng_apply_block = """        # NGRAM_GATE_MARKER apply: optional learned per-position gate factor
+        _gate = None
+        if self._ngram_gate_enabled and self._ngram_enabled:
+            _gate = torch.sigmoid(self.ngram_gate_proj(x.detach())).float()  # (B*S, 1) in [0,1]
+        # ENTROPY_ADAPTIVE_NGRAM_MARKER: model-entropy-gated n-gram mix
+        if self._ngram_enabled and bool(int(os.environ.get("USE_ENTROPY_ADAPTIVE_NGRAM", "0"))):
+            _p = torch.softmax(logits.float(), dim=-1)
+            _logp = torch.log_softmax(logits.float(), dim=-1)
+            _H = -(_p * _logp).sum(dim=-1, keepdim=True)  # (B*S, 1)
+            _Hmax = float(torch.log(torch.tensor(float(self._bigram_tab.shape[-1] if self._bigram_tab.numel() > 1 else 1024))))
+            _ent_gate = (_H / max(_Hmax, 1e-9)).clamp(0.0, 1.0)
+            if _gate is None:
+                _gate = _ent_gate
+            else:
+                _gate = _gate * _ent_gate  # combine learned + entropy gates multiplicatively
+        # NGRAM_BIAS_MARKER apply: blend in precomputed n-gram log-probs
+        if self._ngram_enabled and self._bigram_tab.numel() > 1:"""
+    if old_ng_apply_block in content:
+        content = content.replace(old_ng_apply_block, new_ng_apply_block)
+        print("  ✓ added ENTROPY_ADAPTIVE_NGRAM gating")
+
 # Patch 13: USE_PARALLEL_RESIDUALS=1 → compute attn and mlp in parallel from the same input.
 # Found in research cron #1 (Apr 7 21:23 local) by mining recent openai/parameter-golf PRs:
 #   PR #1437: Record SP8192 + Parallel Residuals + 3-Layer Recurrence — val_bpb 1.07800

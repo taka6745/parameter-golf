@@ -74,3 +74,53 @@ This is the GPT-J / PaLM trick, validated in 3 of the top recent records.
 2. **Depth recurrence** with mixed-precision quant (the version that's NOT dead)
 3. **MuonEq-R** variant of the Muon optimizer
 4. **PartialRoPE + FA3** combo
+
+---
+
+## 2026-04-07 21:30 local — Mid-fire pivot to TRULY NOVEL
+
+User pushback: "I want research level findings, we don't want to be testing shit
+people already submitted, we want bleeding edge". Parallel residuals (Patch 13)
+is in 3+ existing PRs — that's PORTING, not research.
+
+Real novel ideas grounded in our Mac MLX research week + RESEARCH.md analysis
+that are NOT in any open PR I've found:
+
+### Patch 14 (NEW THIS FIRE) — USE_ENTROPY_ADAPTIVE_NGRAM
+
+**TRULY NOVEL.** Use the model's own per-token softmax entropy as a deterministic
+gate for the n-gram bias mixing weight. Math:
+
+```
+p_i = softmax(logits_i)
+H_i = -sum(p_i * log(p_i))
+gate_i = H_i / log(V)         # in [0, 1]
+logits_i_final = logits_i + gate_i * (w_bi * bigram_bias_i + w_tri * trigram_bias_i + w_four * fourgram_bias_i)
+```
+
+Hypothesis: when the model is uncertain (high entropy), trust the n-gram bias;
+when it's confident (low entropy), trust itself. Zero learned params, ~4 ops per
+token at the output. Different from:
+- Mac §32 cmix-style logistic mixing (fixed scalar weights)
+- Patch 12 NGRAM_GATE (learned linear, empirically fails: NG1=3.42 vs L5=3.29)
+- Adaptive softmax / temperature scaling (scales the whole distribution)
+
+This is a NEW connection: the model's own confidence steering its trust in the
+external prior. Pushed in this fire, queued as EA0/EA1/EA2/EA3.
+
+### Top 5 unique-to-us ideas to ship in subsequent fires
+
+| Idea | Source | Patch # |
+|---|---|---|
+| **Entropy-adaptive n-gram mix** | Novel (this fire) | Patch 14 ✅ |
+| **Tabulation hashing** for n-gram tables | RESEARCH.md §38 | Patch 15 (next fire) |
+| **Multi-hash count-min sketch** for n-grams | Novel (count-min for log-probs) | Patch 16 |
+| **Q-R skip-bigram decomposition** | RESEARCH.md §31 (+0.005 BPB) | Patch 17 |
+| **Curriculum n-gram weight decay** | Novel (Mac always used fixed) | Patch 18 |
+
+### Why these satisfy the constraints
+
+- **Novel**: none of the recent top PRs (mined Apr 7) use any of these
+- **Mac-grounded** or **theoretically grounded** (count-min sketch is a published technique adapted to log-prob tables)
+- **Scales**: all are forward-pass changes that work the same at any model size
+- **Don't break BPB**: at worst they degrade to baseline (entropy gate → 1.0 if model is uniform)
