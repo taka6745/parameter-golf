@@ -184,6 +184,19 @@ def main() -> None:
     print(f"EXPERIMENTS_FILE={EXPERIMENTS_FILE}", flush=True)
     print(f"RESULTS_FILE={RESULTS_FILE}", flush=True)
     while True:
+        # Auto-pull experiments.json from git so live edits to the queue propagate
+        # without requiring a runner restart. --autostash because the patcher
+        # modifies train_gpt.py locally.
+        try:
+            subprocess.run(
+                ["git", "pull", "--rebase", "--autostash"],
+                cwd=str(REPO_ROOT),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=15,
+            )
+        except Exception as e:
+            print(f"  (git pull failed: {e})", flush=True)
         experiments = load_experiments()
         results = load_results()
         exp = pick_next(experiments, results)
