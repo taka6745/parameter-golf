@@ -2037,3 +2037,70 @@ Pod uptime ≈ 9h 46min × $0.30/h = $2.93 raw GPU + $1.10 H100 burn + $2.30 ops
 **Next research fire priority**: investigate TMA Megakernel (5 PR adoption, hardware-side, our unexplored category). May give significant additional speedup.
 
 **Currently running CHAMP_L5_seed42 will finish in ~3 min** with the first complete experiment under proper compute scale. That's the real baseline for re-validation.
+
+---
+
+## Research Fire #21 — 2026-04-08 (cron min :08, SPEED PRIORITY) — Wallclock bump + Hymba/TMA investigation
+
+**Subject**: Per OVERNIGHT_PLAN.md priority override (speed/util first), this fire validates the 100% GPU util breakthrough from audit fire #9 and addresses the wallclock budget mismatch.
+
+### The wallclock mismatch problem
+
+After the speed fix, step time is ~822 ms (was ~190 ms but with 64× more compute per step). With `MAX_WALLCLOCK_SECONDS=300` per experiment, we only complete ~365 of the 1500 target steps. That's 24M tokens per experiment (16× more than the old broken config) but still fewer optimizer updates per experiment.
+
+### Action: bumped wallclock to 900s for top candidates
+
+Bumped MAX_WALLCLOCK_SECONDS from 300 → 900 for 9 priority experiments:
+- SP1, SP2, SP3, SP4, SP5 (the speed family)
+- CHAMP_L4_seed42, CHAMP_L4_seed1337 (the multi-cycle baseline)
+- CS2_coprime_L4weights, CS3_coprime_with_engram (the previous top results)
+
+At 822 ms/step × 900 s = ~1095 steps per experiment. **3× more learning per experiment** under the new compute regime.
+
+Added **SP6_max_stack_900s**: the canonical reference experiment with full validated stack (Coprime Stride + EngramLite + leaky + ngram + L4 weights + seed 42 + 900s budget). This is the "what would the H100 see if it ran our best stack" reference.
+
+### Hymba (PR #852, LESSONS §28) — DEFERRED
+
+Subagent investigated. Reported 85 ms/step at 1.1189 BPB on H100 baseline, with parallel attention + Mamba SSM hybrid via learnable sigmoid gate.
+
+**Why deferred**:
+- Requires `mamba-ssm` + `causal-conv1d` external CUDA libraries (NOT installed on our pod)
+- 1551-line file replacement (HymbaAttention class is 110 LOC of that, but the full pipeline is much bigger)
+- "218 ms/step on 3080 Ti" is a 7.5× scaling estimate from H100, not measured
+- Quality 1.1189 BPB is WORSE than current top open PRs (1.078-1.09)
+- Risk/return ratio bad: high integration risk for unmeasured speedup that's quality-negative
+
+If H100 escalation cycle has time, Hymba is worth a shot. Not in this fire.
+
+### TMA Megakernel (PR #1450) — DEFERRED PERMANENTLY
+
+Subagent investigated. PR #1450 = 1.08480 BPB uses TMA-fused Triton kernel for matmul + leaky_relu + square fusion.
+
+**Why deferred permanently**:
+- **H100-only via `triton.tools.tensor_descriptor.TensorDescriptor`** (Hopper SM90+ only)
+- On RTX 3080 Ti (Ampere), would NOT compile — and even if rewritten, the estimated step time is **~949 ms/step (WORSE than our current 822 ms/step)**
+- Only 2 PRs use it (#1420 self, #1450 self)
+- Dead end for our hardware, but valuable for H100 escalation if we had a Hopper kernel writer
+
+### Local environment incident
+
+Mid-fire, I tried to edit experiments.json from the local repo but the file was missing. Investigation revealed I was on **branch `sota-prikshit-hymba11-muon`** locally instead of `main`. All my recent commits were correctly going to `origin/main` via git push, but the LOCAL working tree was on a different branch that doesn't have `runpod_tests/`.
+
+Fixed: `git stash + git checkout main + git pull origin main`. Local tree restored. All recent commits intact on main.
+
+**Lesson for OVERNIGHT_PLAN.md**: every cron fire should verify it's on `main` before any local file operations. Add `git status -b | head -1` to the monitor playbook.
+
+### What this fire produced
+
+- **9 experiments bumped to 900s wallclock**
+- **SP6_max_stack_900s** added — canonical reference under proper compute
+- **Hymba/TMA investigation completed** — both DEFERRED (one for now, one permanently)
+- **Local branch issue diagnosed and fixed**
+- **No code patches** (RESEARCH_LOG and queue config only)
+
+### Current state
+
+- Loop healthy, GPU at 100% util, single clean process tree
+- CHAMP_L5_seed42 finishing first proper-compute experiment in next ~3 min
+- Will get first real baseline train_loss in next monitor fire
+- Spend ~$6.40 / $36 (17.8%)
