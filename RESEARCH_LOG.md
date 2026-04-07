@@ -1454,3 +1454,69 @@ If CS family lands in 3.27-3.30 band (within champion noise), shard-level coprim
 - **First non-architectural, non-optimizer, non-eval patch** — testing a completely new vector
 
 The data-side direction has 26 PR records of evidence for the full variant. Even if our shard-level version is only 25% as effective, that's still measurable and orthogonal to all existing patches.
+
+---
+
+## Research Fire #16 — 2026-04-08 (cron min :16, Track A → tokenizer-side) — NO SHIP, blocker identified
+
+**Subject**: First tokenizer-side research fire (0 tokenizer-side patches in our 24-patch stack — most underexplored category per cross-domain rotation rule).
+
+### Subagent finding (3 candidate tokenizer-side techniques)
+
+1. **Complementary Loss Weighting** — downweight loss when bigram is confident. Subagent claims it's "already in train_gpt_mlx_v17.py lines 506-522". **WRONG CODEBASE**: that's our MLX experimentation file for Mac iteration. The H100 train_gpt.py we use on the pod does NOT have this. Would need to be ported.
+
+2. **Three-Tier Token Classification + DCLS Salience** (PR #1402) — pending H100 validation in their PR, not yet proven. Risk-heavy.
+
+3. **BPE-Dropout (Provilkov et al. 2020)** — stochastic subword segmentation during training, standard at eval. NOT in any comp PR. ~20 LOC.
+
+### Critical blocker for ALL three at our scale
+
+**Our training pipeline uses pre-tokenized .bin files**. The TokenStream class (verified by subagent in fire #15) reads `load_data_shard(self.files[file_idx])` which loads pre-existing fineweb_*.bin files containing already-tokenized integer arrays.
+
+This means:
+- **BPE-Dropout** requires live re-tokenization at training time → would slow training ~100× OR require pre-generating multiple stochastic .bin files (multi-hour preprocessing). Infeasible in a research fire.
+- **Complementary loss weighting** is feasible (it's at the loss level not the tokenizer level) but it's a port from our MLX prototype, not from a top comp PR. Would need re-implementation in train_gpt.py and the bigram lookup is already there from Patch 6.
+- **Three-tier classification** requires both token frequency tables AND a complex EMA surprise tracker. ~60 LOC, untested at scale, PR #1402 still pending.
+
+### Why I'm NOT shipping this fire
+
+1. **No clear high-confidence pick**: BPE-Dropout is the only true "novel-to-comp" candidate but the pre-tokenized data pipeline blocks it.
+2. **Complementary loss weighting** could be shipped (~20 LOC port) but it's neither novel nor port-from-top-records — it's a port from our own MLX prototype which we never validated.
+3. **Three-tier classification** is too risky (PR #1402 still pending) for the marginal expected value.
+
+Per user instruction: "find ONE novel actionable technique. Implement IF easy/medium and high-confidence. Otherwise, append to RESEARCH_LOG.md with 'queued for next fire'."
+
+**This fire qualifies as "queued, not shipped"**.
+
+### Tokenizer-side architectural insight
+
+The 16MB byte-level competition has a structural advantage for SP1024 (smaller vocab, smaller embedding matrix → more params for the model body). The top open PRs (#1437, #1423) use SP8192 because their depth recurrence + parallel residuals stack benefits from finer-grained tokens. **At our 22M / no-depth-recurrence scale, SP1024 may actually be optimal.** Switching to BPE-8192 would consume ~24K extra params for embedding (8K-1K=7K tokens × 256 dim = 1.8M extra params at fp32) which we'd need to compress to fit budget.
+
+This argues against the BPE-8192 build (task #49). Worth deferring it indefinitely until we have a depth-recurrent model where the finer tokens matter.
+
+### Cross-domain coverage update
+
+After 16 fires, our coverage:
+- training-side: 5 (#2, #3, #7, #13, #14)
+- optimizer-side: 2 (#9, #10)
+- eval-side: 3 (#5, #6, #11)
+- compression-side: 1 (#8)
+- data-side: 2 (#12, #15) → Patch 20 SHIPPED
+- tokenizer-side: **1 (#16, NOT SHIPPED)**
+- hardware-side: 0
+
+Still underexplored: hardware-side (0 fires). Next research fire could investigate custom CUDA kernels or flash-attention variants. But realistic shippable hardware-side techniques are rare (require multi-day implementation usually).
+
+### Better alternative to investigate next research fire
+
+**Loss-side technique**: a new per-token weighting scheme based on n-gram bias entropy (combining what we have in Patch 6 with a novel weighting rule). This would be NEUTRAL between training-time and tokenizer-side categories. ~10 LOC if it works. Worth a focused subagent investigation to see if any comp PR uses something similar.
+
+### What this fire produced
+
+- **Tokenizer-side investigation completed** — first time we've explored this domain
+- **Pre-tokenized data pipeline identified as a blocker** for BPE-Dropout and similar tokenizer-time techniques
+- **Architectural insight**: SP1024 may actually be optimal for our architecture; BPE-8192 swap is lower priority than previously thought
+- **Task #49 (BPE-8192 ngram tables)** can be deferred indefinitely
+- **No code patches pushed**
+
+This fire's value is in the NEGATIVE result: knowing what we CAN'T cheaply ship is as important as knowing what we can.
