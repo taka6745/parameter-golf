@@ -649,6 +649,98 @@ else:
         content = content.replace(old_ng_apply_block, new_ng_apply_block)
         print("  ✓ added ENTROPY_ADAPTIVE_NGRAM gating")
 
+# Patch 22: USE_ENGRAM_LITE=1 → learnable hash-embedding n-gram head (PR #1440).
+# From "[Submission] EngramLite + Mousse + Progressive Depth Recurrence + TTT" — claimed
+# val_bpb 1.1026 single seed in PR #1440. EngramLite alone attributed -0.003 BPB delta.
+#
+# This is a GENERALIZATION of our Patch 6 NGRAM_BIAS, which uses FROZEN log-prob tables
+# built from training data statistics. EngramLite adds a parallel LEARNABLE n-gram head:
+#   - shared nn.Embedding(buckets=3072, embed_dim=112) for both bigram and trigram hashes
+#   - separate sigmoid gates per hash order, init at -1.0 (sigmoid≈0.27, conservative start)
+#   - shared nn.Linear(112, vocab_size) projection, zero-init so it doesn't dominate early
+#   - bigram + trigram contributions summed and added to logits as residual
+#
+# Stacks with Patch 6: static log-prob bias gives the data-grounded prior, EngramLite
+# learns a residual on top. Both contribute to logits. Cost: ~460k params at sp1024,
+# ~1M params at sp8192. Idempotent via ENGRAM_LITE_MARKER.
+if "ENGRAM_LITE_MARKER" in content:
+    print("  ✓ engram lite already applied")
+else:
+    # Add EngramLiteHead class right BEFORE the GPT class definition (always invariant)
+    old_gpt_class = """class GPT(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        num_layers: int,
+        model_dim: int,"""
+    new_gpt_class = """class EngramLiteHead(nn.Module):
+    # ENGRAM_LITE_MARKER: learnable hash-embedding n-gram head from PR #1440
+    def __init__(self, vocab_size: int, hash_buckets: int = 3072, embed_dim: int = 112):
+        super().__init__()
+        self.hash_buckets = hash_buckets
+        self.embed = nn.Embedding(hash_buckets, embed_dim)
+        self.proj = nn.Linear(embed_dim, vocab_size, bias=False)
+        with torch.no_grad():
+            self.proj.weight.zero_()  # zero init so it doesn't dominate early training
+        self.gate_bigram = nn.Parameter(torch.full((1,), -1.0))
+        self.gate_trigram = nn.Parameter(torch.full((1,), -1.0))
+
+    def forward(self, input_ids: Tensor) -> Tensor:
+        ids_long = input_ids.long()  # (B, S)
+        # Bigram hash on current token
+        bi_hash = (ids_long * 36313) % self.hash_buckets
+        bi_emb = self.embed(bi_hash)  # (B, S, embed_dim)
+        bi_logits = self.proj(bi_emb) * torch.sigmoid(self.gate_bigram)
+        # Trigram hash on (prev, current)
+        prev = F.pad(ids_long, (1, 0))[:, :-1]
+        tri_hash = (prev * 36313 + ids_long * 27191) % self.hash_buckets
+        tri_emb = self.embed(tri_hash)
+        tri_logits = self.proj(tri_emb) * torch.sigmoid(self.gate_trigram)
+        return bi_logits + tri_logits  # (B, S, vocab_size)
+
+
+class GPT(nn.Module):
+    def __init__(
+        self,
+        vocab_size: int,
+        num_layers: int,
+        model_dim: int,"""
+    if old_gpt_class in content:
+        content = content.replace(old_gpt_class, new_gpt_class)
+        print("  ✓ added EngramLiteHead class definition")
+
+    # Init the EngramLiteHead in GPT.__init__ — anchor on the MTP init block (stable from Patch 21)
+    old_mtp_init_close = """        else:
+            self.mtp_blocks = None
+        self._init_weights()"""
+    new_mtp_init_close = """        else:
+            self.mtp_blocks = None
+        # ENGRAM_LITE_MARKER: optional learnable n-gram head
+        self._engram_lite_enabled = bool(int(os.environ.get("USE_ENGRAM_LITE", "0")))
+        if self._engram_lite_enabled:
+            self.engram_lite = EngramLiteHead(vocab_size)
+        else:
+            self.engram_lite = None
+        self._init_weights()"""
+    if old_mtp_init_close in content:
+        content = content.replace(old_mtp_init_close, new_mtp_init_close)
+        print("  ✓ added EngramLite init in GPT.__init__")
+
+    # Apply: add the EngramLite logits to the main logits BEFORE the softcap.
+    # Anchor on the softcap line which is stable across patches.
+    old_softcap_line = """        logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
+        # NGRAM_GATE_MARKER apply: optional learned per-position gate factor"""
+    new_softcap_line = """        # ENGRAM_LITE_MARKER apply: add learnable hash n-gram head logits to main logits
+        if self._engram_lite_enabled and self.engram_lite is not None:
+            _el_logits = self.engram_lite(input_ids)  # (B, S, V)
+            _el_logits_flat = _el_logits.reshape(-1, _el_logits.size(-1))
+            logits_proj = logits_proj + _el_logits_flat
+        logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
+        # NGRAM_GATE_MARKER apply: optional learned per-position gate factor"""
+    if old_softcap_line in content:
+        content = content.replace(old_softcap_line, new_softcap_line)
+        print("  ✓ added EngramLite forward apply")
+
 # Patch 21: USE_MTP=1 → Multi-Token Prediction (DeepSeek-V3 style).
 # Adds K auxiliary heads that predict tokens i+2, i+3, ..., i+K+1 (vs main head's i+1).
 # Each head is a single Block that takes the main model's pre-norm residual and produces
