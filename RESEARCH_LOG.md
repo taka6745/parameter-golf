@@ -1914,3 +1914,47 @@ Currently running on the clean single-runner tree. First experiment with new BAS
 - **OVERNIGHT_PLAN.md prioritization** still in effect
 
 This is the SECOND speed-priority fire in a row, replacing the previous "find one novel technique" pattern that produced marginal ports.
+
+---
+
+## Research Fire #20 — 2026-04-08 (cron min :08, SPEED PRIORITY) — Replaced crashing SPEED family with SP family
+
+**Subject**: After the emergency torch.compile revert (research fire #19), the SPEED1-5 experiments still had `USE_TORCH_COMPILE=1` explicitly in their per-experiment env_overrides. They would have crashed 3× each = 75 min of wasted compute. Replaced with SP family.
+
+### Changes
+
+**Removed**: SPEED1-5 (all set USE_TORCH_COMPILE=1, all would crash)
+
+**Added**: SP1-5 (all set USE_TORCH_COMPILE=0, test progressively bigger batches)
+
+| Experiment | seq | batch tokens | extra | purpose |
+|---|---|---|---|---|
+| SP1 | 1024 | 65536 | none | baseline (current BASE_ENV) |
+| SP2 | 1024 | 131072 | none | 2× batch |
+| SP3 | 2048 | 65536 | none | 2× seq |
+| SP4 | 1024 | 131072 | Coprime + EngramLite | full stack big batch |
+| SP5 | 2048 | 131072 | Coprime + EngramLite | full stack max compute |
+
+`MAX_WALLCLOCK_SECONDS=600` to fit bigger batches without timing out.
+
+### Goal
+
+Identify which `(seq, batch)` combo gives **80%+ GPU util on the 3080 Ti** without OOM. SP4 or SP5 should be the new H100 escalation candidate if they validate cleanly.
+
+The validation criteria for each SP experiment:
+1. Does it complete (no OOM, no torch.compile crash)?
+2. What's the steady-state GPU util?
+3. What's the step time?
+4. What's the train_loss after 1500 steps with the bigger compute?
+
+### Implications for prior verdicts
+
+If SP1 (seq=1024, batch=65536) lands at significantly different train_loss than CHAMP_L4_seed42 (which used seq=128, batch=1024), that proves the entire "neutrality plateau" verdict was a measurement artifact at the wrong scale.
+
+If SP4 (full stack big batch, with the validated CS+EL combo) lands below the previous CS3 = 3.2595 top-1, that's a clear direction for H100 escalation.
+
+### Tasks updated
+
+- Task #63 (SPEED family validation): COMPLETED with FAILED status. torch.compile re-enable broke. Deferred until proper investigation of which ops break dynamic shape tracing.
+- Task #65 (speed push 1 validation): COMPLETED, superseded by speed push 2 (task #66).
+- Task #66 (speed push 2 validation): still pending — will validate with SP family.
