@@ -1,17 +1,14 @@
 [
-  {"name": "L0_leaky_relu_alone",   "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "0", "MAX_WALLCLOCK_SECONDS": "300"},
-  {"name": "L1_leaky_plus_full_ng", "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
-  {"name": "L2_leaky_plus_full_ng_seed42", "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "SEED": "42", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
+  {"name": "L3_leaky_full_ng_seed999",  "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "SEED": "999", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
+  {"name": "L4_leaky_strong_weights",   "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "NGRAM_W_BIGRAM": "0.25", "NGRAM_W_TRIGRAM": "0.25", "NGRAM_W_FOURGRAM": "0.20", "MAX_WALLCLOCK_SECONDS": "300"},
+  {"name": "L5_leaky_low_bigram",       "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "NGRAM_W_BIGRAM": "0.15", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
 
-  {"name": "BW0_byte_weight_alone", "USE_BYTE_WEIGHT": "1", "USE_NGRAM_BIAS": "0", "MAX_WALLCLOCK_SECONDS": "300"},
-  {"name": "BW1_bw_plus_leaky",     "USE_BYTE_WEIGHT": "1", "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "0", "MAX_WALLCLOCK_SECONDS": "300"},
-  {"name": "BW2_bw_plus_full_ng",   "USE_BYTE_WEIGHT": "1", "USE_NGRAM_BIAS": "1", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
+  {"name": "M0_mom099_leaky_ng",        "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "MUON_MOMENTUM": "0.99", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
+  {"name": "M1_mom097_leaky_ng",        "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "MUON_MOMENTUM": "0.97", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
 
-  {"name": "STK_full_stack",        "USE_LEAKY_RELU": "1", "USE_BYTE_WEIGHT": "1", "USE_NGRAM_BIAS": "1", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
-  {"name": "STK_full_stack_seed42", "USE_LEAKY_RELU": "1", "USE_BYTE_WEIGHT": "1", "USE_NGRAM_BIAS": "1", "SEED": "42", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
+  {"name": "LR_lower_lr_002",           "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "MATRIX_LR": "0.02", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
+  {"name": "LR_lower_lr_06",            "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "MATRIX_LR": "0.06", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
 
-  {"name": "T1_bigbatch_full_ngram", "USE_NGRAM_BIAS": "1", "TRAIN_BATCH_TOKENS": "8192", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
-
-  {"name": "REF_baseline_seed1",     "USE_NGRAM_BIAS": "0", "SEED": "1337", "MAX_WALLCLOCK_SECONDS": "300"},
-  {"name": "REF_full_ngram_seed1",   "USE_NGRAM_BIAS": "1", "SEED": "1337", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"}
+  {"name": "WD_warmdown_3000",          "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "WARMDOWN_ITERS": "3000", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"},
+  {"name": "WD_warmdown_500",           "USE_LEAKY_RELU": "1", "USE_NGRAM_BIAS": "1", "WARMDOWN_ITERS": "500", "NGRAM_W_BIGRAM": "0.20", "NGRAM_W_TRIGRAM": "0.20", "NGRAM_W_FOURGRAM": "0.15", "MAX_WALLCLOCK_SECONDS": "300"}
 ]
