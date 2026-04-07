@@ -1861,3 +1861,56 @@ Most urgent next moves:
 1. **Next monitor fire (~15 min)**: verify GPU util > 80% with the new config. If not, push batch tokens 2x more.
 2. **Investigate SPEED4/5 crash root cause**: torch.compile + XSA/EL conflict. May need to disable torch.compile when XSA or EL are active.
 3. **Re-validate ALL prior patches under the new compute regime**: the "neutrality plateau" verdict was based on 0.75% of the intended data volume. Mousse, MuonEq-R, NorMuon, Depth Recurrence may all need fresh runs at the proper batch size.
+
+---
+
+## Research Fire #19 — 2026-04-08 (cron min :48, Track A → SPEED PRIORITY) — Speed push 2 + torch.compile fix
+
+**Subject**: OVERNIGHT_PLAN.md priority override mandates speed-first. Three actions in this fire:
+1. Patch 2 torch.compile `dynamic=True, fullgraph=False` to fix XSA/EL crash
+2. BASE_ENV bumped: TRAIN_SEQ_LEN 512→1024, TRAIN_BATCH_TOKENS 32768→65536
+3. Cleaned up duplicate runner processes (took 3 attempts due to bash wrapper auto-respawn)
+
+### Speed deployment progression
+
+| Stage | TRAIN_SEQ_LEN | TRAIN_BATCH_TOKENS | GPU Memory | GPU Util | Status |
+|---|---|---|---|---|---|
+| Original (8h+) | 128 | 1024 | 744 MB (6%) | 34% | THE BUG |
+| Speed push 1 (20:25) | 512 | 32768 | (not validated) | (not validated) | Reverted by duplicate-runner fight |
+| Speed push 2 (20:48) | **1024** | **65536** | **2410 MB (19.6%)** | TBD (in startup) | Deploying now |
+
+**Speed push 2 is 4× more compute per step than push 1**, and 128× more than the original buggy config. Total tokens per experiment now ~98M (vs original 1.5M).
+
+### Patch 2 fix
+
+```python
+# Was: torch.compile(base_model)  — default mode, crashed on XSA/EL
+# Now: torch.compile(base_model, dynamic=True, fullgraph=False)
+```
+
+`dynamic=True` allows shape variations during tracing (XSA reshape ops have non-static shapes). `fullgraph=False` allows fallback to eager for unsupported ops. Should fix the SPEED4/SPEED5 crashes.
+
+### Duplicate runner saga
+
+**The bash wrapper `runpod_tests/loop/run_forever.sh` survives `pkill -f experiment_runner.py` and `pkill -f train_gpt.py`** because pkill matches the python processes, not the bash. Each restart attempt left an orphan wrapper that respawned the runner.
+
+**Resolution**: explicit `kill -9 <wrapper_PID>` for each instance, then re-verify zero processes via `ps -ef | grep run_forever`. Now ONE clean tree.
+
+**Lesson for OVERNIGHT_PLAN.md**: future restarts must use `pkill -f run_forever.sh` BEFORE killing python processes.
+
+### Status
+
+Currently running on the clean single-runner tree. First experiment with new BASE_ENV is in train_gpt startup (loading n-gram tables, compiling model with torch.compile dynamic=True). Next monitor fire (~10 min) will validate:
+1. GPU util > 60% (was 34%, target 80%)
+2. Step time reasonable (target 200-800ms)
+3. No torch.compile crashes
+4. Train_loss with 4× more compute per step + 64× more tokens total → expect significantly different numbers (lower OR higher depending on whether compute or noise dominates)
+
+### What this fire produced
+
+- **Patch 2 torch.compile fix** (dynamic=True, fullgraph=False)
+- **BASE_ENV speed push 2** (seq 1024, batch 65536)
+- **Duplicate runner cleanup** with documented prevention
+- **OVERNIGHT_PLAN.md prioritization** still in effect
+
+This is the SECOND speed-priority fire in a row, replacing the previous "find one novel technique" pattern that produced marginal ports.
