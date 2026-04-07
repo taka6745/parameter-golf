@@ -26,6 +26,13 @@ while true; do
     # Auto-pull latest experiments / runner code before each restart.
     # --autostash because the patcher modifies train_gpt.py locally.
     git pull --rebase --autostash 2>&1 | tail -3 || true
+    # Restore train_gpt.py from backup so patcher applies cleanly even after
+    # the patcher itself was edited. The patcher is idempotent within a run
+    # but doesn't auto-upgrade old patches when the upstream patcher source changes.
+    if [ -f train_gpt.py.bak ]; then
+        cp train_gpt.py.bak train_gpt.py
+    fi
+    bash runpod_tests/chore/08_patch_train_gpt.sh 2>&1 | tail -20 || true
     python3 -u runpod_tests/loop/experiment_runner.py
     echo "=== runner exited with code $? at $(date -u) — restart in 5s ==="
     sleep 5

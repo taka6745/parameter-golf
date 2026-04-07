@@ -351,6 +351,64 @@ else:
         content = content.replace(old_softcap, new_softcap)
         print("  ✓ added NGRAM_BIAS forward pass")
 
+# Patch 8: USE_WAVELET=1 → causal multi-scale averaging on half dims after each block.
+# Mac validated -0.018 BPP at 1000 steps (best Mac result was 1.6929 with this).
+# Implementation lifted from runpod_tests/validate/v03_wavelet_mix.py.
+# Receptive field per layer: k_i = min(2^(i+1), seq_len), so deeper layers see more context.
+# Idempotent via WAVELET_GPT_MARKER.
+if "WAVELET_GPT_MARKER" in content:
+    print("  ✓ wavelet GPT already applied")
+else:
+    # Inject the wavelet_mix helper + USE_WAVELET flag right after NGRAM init block
+    old_ng_close = """        self._init_weights()"""
+    new_ng_close = """        self._wavelet_enabled = bool(int(os.environ.get("USE_WAVELET", "0")))
+        self._wavelet_mix_ratio = float(os.environ.get("WAVELET_MIX_RATIO", "0.20"))
+        self._init_weights()
+
+    @staticmethod
+    def _wavelet_mix(x, layer_idx, mix_ratio):
+        # WAVELET_GPT_MARKER: causal multi-scale averaging on the right half of dims
+        B, T, D = x.shape
+        half = D // 2
+        left = x[..., :half]
+        right = x[..., half:]
+        k = min(2 ** (layer_idx + 1), T)
+        cs = torch.cumsum(right, dim=1)
+        shifted = F.pad(cs[:, :-k], (0, 0, k, 0))
+        counts = torch.arange(1, T + 1, device=x.device, dtype=right.dtype)
+        counts = counts.clamp(max=k).unsqueeze(0).unsqueeze(-1)
+        right_avg = (cs - shifted) / counts
+        right_mixed = (1.0 - mix_ratio) * right + mix_ratio * right_avg
+        return torch.cat([left, right_mixed], dim=-1)"""
+    if old_ng_close in content:
+        content = content.replace(old_ng_close, new_ng_close, 1)
+        print("  ✓ added WAVELET helper + flags")
+
+    # Apply wavelet after each block in the encoder + decoder loops
+    old_loop = """        # First half stores skips; second half reuses them in reverse order.
+        for i in range(self.num_encoder_layers):
+            x = self.blocks[i](x, x0)
+            skips.append(x)
+        for i in range(self.num_decoder_layers):
+            if skips:
+                x = x + self.skip_weights[i].to(dtype=x.dtype)[None, None, :] * skips.pop()
+            x = self.blocks[self.num_encoder_layers + i](x, x0)"""
+    new_loop = """        # First half stores skips; second half reuses them in reverse order.
+        for i in range(self.num_encoder_layers):
+            x = self.blocks[i](x, x0)
+            if self._wavelet_enabled:
+                x = self._wavelet_mix(x, i, self._wavelet_mix_ratio)
+            skips.append(x)
+        for i in range(self.num_decoder_layers):
+            if skips:
+                x = x + self.skip_weights[i].to(dtype=x.dtype)[None, None, :] * skips.pop()
+            x = self.blocks[self.num_encoder_layers + i](x, x0)
+            if self._wavelet_enabled:
+                x = self._wavelet_mix(x, self.num_encoder_layers + i, self._wavelet_mix_ratio)"""
+    if old_loop in content:
+        content = content.replace(old_loop, new_loop)
+        print("  ✓ added WAVELET calls in GPT.forward")
+
 with open("train_gpt.py", "w") as f:
     f.write(content)
 PYEOF
