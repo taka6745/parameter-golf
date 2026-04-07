@@ -752,7 +752,9 @@ class GPT(nn.Module):
     old_softcap_line = """        logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
         # NGRAM_GATE_MARKER apply: optional learned per-position gate factor"""
     new_softcap_line = """        # ENGRAM_LITE_MARKER apply: add learnable hash n-gram head logits to main logits
-        if self._engram_lite_enabled and self.engram_lite is not None:
+        # Wrapped in getattr for safety: if init didn't apply (anchor mismatch),
+        # the forward pass should still work without crashing.
+        if getattr(self, '_engram_lite_enabled', False) and getattr(self, 'engram_lite', None) is not None:
             _el_logits = self.engram_lite(input_ids)  # (B, S, V)
             _el_logits_flat = _el_logits.reshape(-1, _el_logits.size(-1))
             logits_proj = logits_proj + _el_logits_flat
