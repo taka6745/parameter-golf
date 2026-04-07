@@ -521,3 +521,50 @@ EM-INF was equivalent to temperature sharpening — pure information-free entrop
 ### Action: NO PUSH this fire. Formula captured for next escalation cycle.
 
 The subagent's verdict was SHIP; I overrode to DEFER for the metric/complexity reasons above. This is consistent with the audit fire #1 verdict "pivot to non-architectural wins" — n-gram tilt IS the right direction, but the right time to implement it is when we have a champion to measure against, not in a research fire that can't validate it.
+
+---
+
+## Audit Fire #2 — 2026-04-08 ~14:45 UTC — re-verify novelty + spend + spot new comp directions
+
+### Pod status
+Loop alive (PID 123956 + 125521). Cycle 2 of the experiment queue ~25% through. Recent notable: **EL2_engram_lite_seed42 cycle-2 = 3.2742** (only +0.0008 above CHAMP_L5_seed1337=3.2734) — the previous "EngramLite preliminarily falsified" claim from audit #1 is now SOFT-REVERSED. EngramLite is **tied within noise** with the champion. Not a clear win, not a clear loss. MTP1_seed999_validation cycle-2 = 3.4640 (essentially same as cycle-1 3.4656) — confirms the seed-999 outlier is structural to that family, not random noise.
+
+### Novelty re-verification (subagent — last 25 open PRs scanned)
+
+**Patches 15/16/21 ALL STILL NOVEL** (zero hits in latest 25 PRs):
+- ✓ Patch 15 USE_TABULATION_HASH — no comp PR mentions Pătraşcu-Thorup or tabulation hashing for n-gram bias tables
+- ✓ Patch 16 USE_GATED_ATTENTION — PR #1410 mentions "Alternating GatedAttention" but that's a different mechanism (parameter-reduction every-other-layer trick, not the NeurIPS 2025 gating arxiv:2505.06708)
+- ✓ Patch 21 USE_MTP — zero comp PRs reference "multi-token", "MTP", "DeepSeek", or arxiv:2412.19437
+
+This is the second consecutive audit confirming these 3 are uncontested. They remain our strongest novelty claim, even though only MTP shows marginal training-loss benefit at our scale.
+
+### New PRs since last audit (~1 hour delta)
+
+| PR# | Created | Title | Score | Assessment |
+|---|---|---|---|---|
+| 1444 | 14:37 | LeakyReLU GPTQ-lite v1 (1xH100) | non-record | Direct competitor on training; LeakyReLU is patch 11 in our stack already |
+| 1443 | 13:51 | ByteJEPA — Byte-Level JEPA | 1.3496 BPB | Novel learning objective (joint-embedding predictive arch). Non-competitive score but bounty-driven |
+| 1441 | 12:28 | nogakeren System Optimizations (in-dev) | dev | Watch — author tag suggests infrastructure work |
+| 1440 | 11:32 | EngramLite + Mousse + ProgDepth | 1.1026 | Already known, source of our Patch 22 |
+
+### Open PR techniques NOT in our 22-patch stack (top 3 most interesting)
+
+1. **PR #1430 Per-Sample SLOT + Causal Backoff N-gram Mixer + entropy-adaptive blend** — claims 0.39642 BPB (suspicious, likely illegal). Even if illegal, the SLOT mechanism (per-sequence learnable [bsz,1,512] hidden + [bsz,1,1024] logit bias = 1536 params) is novel and worth understanding. **Could inform a legal variant.**
+2. **PR #1433 EP8 Lattice Codebook VQ + Hadamard transform + Hessian-aware assignment** — only 1.2067 BPB so non-competitive, but the **compression-side infrastructure** is uniquely interesting. We have ZERO compression-side patches.
+3. **PR #1443 ByteJEPA** — different learning objective entirely (joint-embedding predictive arch on bytes). Non-competitive at 1.3496 but the 3-stage training pipeline (JEPA pretrain → bridge → CE+SWA) is novel category.
+
+### Spend check
+
+Pod uptime ≈ 3h on RTX 3080 Ti @ $0.30/h ≈ **~$1.40 spent / $36 budget**. Soft cap $25, hard cap $36. **6% utilization, 94% headroom**. No throttling needed.
+
+### Queue hygiene (still deferred per "no patches in audit" rule)
+
+The runner is now cycling through dead families (EA*, BG*, NG*) wasting compute on configs we know are falsified. The audit recommendation is: **next research fire should clean these from experiments.json** to free cycle slots for genuinely interesting next-gen experiments. Specifically remove: EA0/1/2/3, NG1/NG2/NG3, BG0/BG3, MEGA_stack_all_novel. Keep all CHAMP_L5/L4 multi-seed and the EL family (EL2 reversal makes them worth keeping).
+
+### Audit verdict #2
+
+We have THREE genuinely novel-to-comp patches (15, 16, 21). They are **marginal at best** at our 22M scale. The audit fire #1 conclusion still stands: **architectural vector exhausted**. The next genuine progress vector is N-gram Tilt (task #53, deferred to H100 escalation) plus the new directions surfaced this fire:
+- Per-sample SLOT (legal variant of PR #1430)
+- Compression-side codebook VQ (PR #1433)
+
+Both are PhD-level, both are non-architectural, both fit the "pivot" recommendation. Logging for next research fire (cron min :08 or :38).
