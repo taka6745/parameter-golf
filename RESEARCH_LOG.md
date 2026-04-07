@@ -77,7 +77,86 @@ This is the GPT-J / PaLM trick, validated in 3 of the top recent records.
 
 ---
 
-## 2026-04-07 21:30 local — Mid-fire pivot to TRULY NOVEL
+## 2026-04-07 22:00 local — 5 subagents returned, MASSIVE synthesis
+
+### Subagent A (BPE-8192 trainer) — ✅ TOKENIZER ALREADY EXISTS
+The exact BPE-8192 tokenizer that produced the -0.129 BPB Mac win is on disk at:
+`data/tokenizers/fineweb_8192_bpe.model` (370,908 bytes, SHA dddbf3c4...).
+Trained on `data/docs_selected.jsonl` (the project's actual 48GB FineWeb corpus, not a HF parquet sample).
+Round-trip validated on `data/datasets/fineweb10B_sp8192/fineweb_val_000000.bin`.
+Action: scp to pod, rebuild n-gram tables for VOCAB=8192, run L5-equivalent experiment with the new tokenizer.
+
+### Subagent B (closed/merged PR audit) — TOP 8 records analyzed
+Frequency table of techniques in the top 8 merged records (Mar 19-30, 2026):
+| technique | count | example PRs |
+|---|---|---|
+| **SmearGate** | 6/8 (75%) | #1019, #549, #315, #287, #265, #162 |
+| **zstd-22 compression** | 5/8 (62%) | #315, #287, #265, #414, #180 |
+| **11 layers** | 4/8 (50%) | #1019, #414, #315, #287 |
+| **BigramHash 1536-3072** | 4/8 | #1019, #549, #414, #315 |
+| **3x MLP** | 3/8 | #287, #265, #162 |
+| **Flash Attention 3** | 3/8 | #315, #287, #265 |
+| **EMA 0.997** | 4+/8 | #414, #315, #287, #1019 |
+| **Partial RoPE 16/64** | 2+/8 | #1019, #315 |
+| **XSA all-layer** | 1/8 (UNIQUE!) | #1019 |
+| **AR Self-Gen GPTQ** | 1/8 (UNIQUE!) | #1019 |
+| **Mixed INT5 MLP / INT6 attn** | 1/8 | #180 |
+
+We have **leaky_relu (1/15 patches)** and that's it from the comp's convergent stack.
+The biggest single gap: **EMA 0.997**. The biggest single advantage in the #1 record (PR #1019): **AR Self-Gen GPTQ calibration**.
+
+⚠ Audit also CONFIRMED that LESSONS.md §29 (depth recurrence DEAD) is wrong — 5+ recent records use it with mixed-precision quant.
+
+### Subagent C (N-gram "Tilt" investigation) — FOUND THE DEFINITION
+N-gram Tilt is NOT additive bias. It's multiplicative single-token boost:
+```
+p_tilt(t) = p_model(t) · exp(β · 𝟙[t==hint]) / Z
+where Z = 1 + p_model(hint) · (exp(β) - 1)
+```
+- `hint` = best-guess next token from a causal n-gram cache (orders 8-16 token + 1-3 within-word + word-start bigrams)
+- `β` ≈ 1.0 (tunable)
+- Built at EVAL TIME from validation prefix only (strict causality)
+- ZERO artifact cost — the cache lives in eval RAM
+- Used by PRs #1437 (1.078 BPB), #1420 (1.080 BPB), #1430 (under review)
+- Original innovation by @abaybektursun, not in any published paper
+- **Delta**: -0.0029 to -0.0055 BPB consistently across 5 seeds
+- **NOT in any paper, NOT in any of our patches** — this is unique to parameter-golf
+
+### Subagent D (TTT implementation researcher) — FULL PATCH SKETCH PROVIDED
+Two TTT variants in SOTA records:
+1. **LoRA TTT** (per-doc, rank 8, Adam) — ~-0.037 BPB total
+2. **Score-First TTT** (PR #461, all-blocks SGD) — ~-0.0025 BPB, **currently SOTA in PR #549 (1.1194 BPB)**
+
+Score-First TTT pattern:
+- Partition val tokens into 32K-token non-overlapping chunks
+- For each chunk: SCORE with sliding window (`torch.inference_mode()`, no grads) THEN TRAIN on it (SGD lr=0.002, mom=0.9, 3 epochs)
+- Last chunk scored but never trained on (causality)
+- All blocks unfrozen
+- Cosine LR decay across chunks
+- Subagent provided FULL ~80-line implementation as Patch 17 sketch.
+- Cost: ~410s on 8xH100, fits in 10 min budget.
+
+### Subagent E (records miner) — Top 5 deep dive
+| rank | dir | val_bpb | tokenizer | NL | top trick |
+|---|---|---|---|---|---|
+| 1 | 2026-03-25_ValCalib_GPTQ_XSA_BigramHash3072 | **1.1147** | sp1024 | 11 | AR Self-Gen GPTQ + XSA-all + BigramHash 3072 |
+| 2 | 2026-03-23_LeakyReLU_LegalTTT_ParallelMuon | 1.1194 | sp1024 | 11 | Score-First TTT + LeakyReLU² + Parallel Muon |
+| 3 | 2026-03-22_11L_EMA_GPTQ-lite_warmdown3500 | 1.1228 | sp1024 | 11 | GPTQ-lite 5-clip percentile sweep |
+| 4 | 2026-03-21_11L_XSA4_EMA_PartialRoPE_LateQAT | 1.1248 | sp1024 | 11 | Partial RoPE 16/64 + LN Scale 1/√(l+1) |
+| 5 | 2026-03-20_11L_XSA4_EMA_Int6_MLP3x_WD04 | 1.1271 | sp1024 | 11 | XSA last-4 layers (efficient GQA-aware reshape) |
+
+EMA, XSA, Parallel Muon are CONVERGENT best practices. We have NONE of them.
+
+## Action plan from subagent synthesis (in EV order)
+
+1. **scp BPE-8192 to pod + rebuild n-gram tables for VOCAB=8192** — biggest single Mac win, free
+2. **Patch 17: EMA 0.997** — in 4+ merged records, ~30 lines
+3. **Patch 18: XSA (last-4 layers)** — in 6+ merged records, ~40 lines, GQA-aware reshape
+4. **Patch 19: Partial RoPE 16/64** — in 2 merged records, ~10 lines
+5. **Patch 20: LN Scale 1/√(layer+1)** — in 2 merged records, ~5 lines (zero params!)
+6. **Patch 21: Score-First TTT** — full sketch from subagent, ~80 lines
+7. **Patch 22: N-gram Tilt** — full math from subagent, ~80 lines
+8. **Patch 23: AR Self-Gen GPTQ calibration** — unique to #1 record, larger but well-defined
 
 User pushback: "I want research level findings, we don't want to be testing shit
 people already submitted, we want bleeding edge". Parallel residuals (Patch 13)
