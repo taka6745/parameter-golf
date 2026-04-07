@@ -1244,3 +1244,71 @@ If DR0 fits and gives a clean train_loss, that's a real validation of depth recu
 - **First architectural patch** in many fires that fits our train_loss metric
 
 This is the third optimizer/architectural patch in 5 fires that I've shipped (Mousse #9, MuonEq-R #10, Depth Recurrence #13). The pattern of "find a port from a top record, ship the conservative variant, validate on the loop within 1-2 hours" is now the operating mode for the remaining session.
+
+---
+
+## Research Fire #14 — 2026-04-08 (cron min :16, Track A) — QK_GAIN_INIT=5.0 port (NO code patch needed)
+
+**Subject**: Subagent gap analysis of top 3 open PRs (#1437, #1423, #1445) for training-time techniques we don't have. Looking for the simplest port that fits our train_loss metric.
+
+### Subagent finding (top 3 PR cross-reference)
+
+**Training-time techniques NOT in our 24-patch stack**:
+1. **QK_GAIN_INIT=5.0** (vs default 1.5) — used in PR #1437 (1.078) AND PR #1423 (1.079). Highest port-with-evidence ratio.
+2. **WD=0.095** (vs default 0.090) — PR #1445 only
+3. **WARMDOWN_FRAC=0.72** (vs default 0.667) — PR #1445 only
+
+The first one (QK_GAIN_INIT) is in TWO of the top 3 PRs, the others only in one. Top confidence pick.
+
+### Critical finding: QK_GAIN_INIT is ALREADY an upstream env var
+
+Second focused subagent confirmed: `qk_gain_init = float(os.environ.get("QK_GAIN_INIT", 1.5))` exists at line 60 of upstream train_gpt.py. Default is **1.5** (NOT 4.0 as the first subagent guessed).
+
+**Application** (line 592-593 in CausalSelfAttention.forward):
+```python
+q = q * self.q_gain.to(dtype=q.dtype)[None, :, None, None]
+y = F.scaled_dot_product_attention(...)
+```
+
+The `q_gain` parameter is initialized from `qk_gain_init` env var and multiplied element-wise with the query tensor before attention. Effectively scales Q-K product by the gain factor inside attention.
+
+### Why no code patch is needed
+
+`QK_GAIN_INIT` is already a first-class env var in upstream train_gpt.py. To port the PR #1437/#1423 finding, I just need to add experiments that pass `QK_GAIN_INIT=5.0` as an environment variable. The runner already supports passing env vars to train_gpt.py. **Zero code changes**, just JSON additions to experiments.json.
+
+This is the cleanest possible ship: no patcher anchor risk, no graceful-fallback code, no marker checks. The patch surface area is exactly 4 new lines in experiments.json.
+
+### Hypertuning rule check
+
+User wishes (CLAUDE.md):
+- "NO HYPERTUNING — don't push experiments that just twiddle weights of validated configs"
+- "PORTING-WITH-EVIDENCE — every patch must either be: (a) novel, or (b) ported from a comp PR that's in the top 10 records"
+
+QK_GAIN_INIT=5.0:
+- ✓ Port from PR #1437 (top open) AND PR #1423 (top open #2)
+- ✓ Single value, NOT a sweep
+- ✓ Targeted single change
+- ✓ Empirical evidence at competitor scale
+
+Satisfies the spirit of "port from top records" without violating "no hypertuning sweeps". Multi-seed validation experiments are explicitly OK per the rule.
+
+### Experiments queued (4 added → queue is now 36)
+
+- **QK0_qkgain5_alone** — QK_GAIN_INIT=5.0 + L5 weights + leaky + ngram (champion config with single change)
+- **QK1_qkgain5_seed42** — multi-seed validation
+- **QK2_qkgain5_L4weights** — QK_GAIN_INIT=5.0 with L4 weights (the more reliable champion family)
+- **QK3_qkgain5_with_engram** — stack with EngramLite to test additivity
+
+### Expected outcome
+
+PR #1437 reports their full stack at val_bpb 1.078 with QK_GAIN_INIT=5.0. PR #1423 also at 1.079. The implied marginal benefit of QK_GAIN_INIT=5.0 alone vs the rest of the stack is small (~-0.0004 BPB based on subagent estimate). At our scale this might translate to -0.005 to -0.015 train_loss — possibly within the noise band but worth measuring.
+
+If QK0 lands at 3.27-3.29 (within champion noise), it's a free addition. If it lands at 3.31+, it's neutral-to-negative. Either way it's a clean empirical answer in 2 cycles (~10 min per experiment).
+
+### What this fire produced
+
+- **4 QK_GAIN experiments queued** for loop validation
+- **No code patches** — purely a JSON queue addition
+- **Highest signal-to-effort ratio** of any research fire so far (4 experiments, 0 LOC, no anchor risk)
+
+This is the cleanest possible "port from top record" we've shipped all night. If it works, great. If it doesn't, we lost zero compute on patcher risk.
