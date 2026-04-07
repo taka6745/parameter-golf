@@ -933,3 +933,98 @@ Pod uptime ~3.7h × $0.30/h ≈ **$2.30 / $36 budget (6% utilization)**. Well un
 - **Per-Sample SLOT** (PR #1430, MERGED 0.39642) — top priority for next fire
 - **EngramLite multi-head gated** (PR #1440, 1.1026) — already partially ported (Patch 22)
 - **Int4 GPTQ packing** (PR #1429/#1426) — extends our deferred Patch 23 INT6 GPTQ direction
+
+---
+
+## Research Fire #11 — 2026-04-08 (cron min :46, Track B = comp PRs) — PR #1430 DEEP DIVE: STILL OPEN, 0.39642 CONFIRMED, LEGAL (BORDERLINE)
+
+**Subject**: Definitively investigate PR #1430 after audit fire #4 flagged it as the most important finding. Three questions: (1) is it actually merged? (2) what techniques does it use? (3) is it legal under issue #677?
+
+### Subagent findings (deep code read of PR #1430)
+
+**Question 1: Merge status**
+- ❌ **NOT MERGED**. State = `open`. merged_at = null. merged_by = null.
+- Created 2026-04-07 02:53:34 UTC, ~14 hours ago.
+- No comp owner review, no LGTM, no comments.
+- **Audit fire #4's previous subagent was WRONG** when it claimed PR #1430 was merged. The other audit fires had it right — PR #1430 is open and unverified.
+
+**Question 2: Score and techniques**
+- ✓ **Score 0.39642 BPB confirmed** in the PR README (3-seed mean, seeds 1337/42/314).
+- Three core techniques in the stack:
+
+  **(a) Per-Sample SLOT** — each sequence in the eval batch gets its own learnable params:
+  - `[bsz, 1, 512]` hidden delta (added to frozen transformer's final hidden state)
+  - `[bsz, 1, 1024]` logit bias
+  - 1536 params per sequence × 128 batch = 196K params trained per eval pass
+  - AdamW 24 steps, cosine LR 0.432 → 0.001, β₁=0.6, β₂=0.5
+  - Optimizes ONLY on "scored positions" (last stride tokens per window)
+  - Code path: lines 1783-1844 of their patched train_gpt.py
+
+  **(b) Causal Backoff N-gram Mixer order-22** — hash-based n-gram cache:
+  - Max order: 22 (bigrams through 22-grams)
+  - 4M hash buckets (~30MB)
+  - Entropy-adaptive blend: `α = 0.20 + 0.55 * sigmoid(2*(H-2.5))`
+  - Strict score-before-update timing (cache updated after current chunk's score is locked)
+  - Code: lines 1489-1599
+
+  **(c) TTT (Test-Time Training)** — post-quant adaptation:
+  - Trains the QUANTIZED model (INT6 via GPTQ)
+  - Freezes blocks 0-9, only blocks 9-10 trainable
+  - 2 passes: full pass + 10% replay at floor LR 0.0001
+  - Strict score-before-update in outer chunk loop
+  - Code: lines 1250-1486
+
+**Question 3: Legality under issue #677**
+- Subagent verdict: ✓ **LEGAL** per strict reading of all four conditions:
+  1. Causal-only: scoring uses only prior tokens
+  2. Score-before-update: every adaptation happens AFTER scoring is locked
+  3. Single-pass: each token scored exactly once
+  4. Full-normalized: F.cross_entropy with proper softmax
+
+**My critical analysis (where the subagent may have been too charitable)**
+
+The subagent's strict reading is correct, but the SPIRIT of issue #677 is "the model shouldn't learn from the val set". PR #1430's TTT explicitly learns from val set chunks. The justification is:
+1. Score chunk N first (locked)
+2. THEN train on chunk N
+3. Score chunk N+1 with the updated model
+4. ...
+
+This passes the strict letter of #677 but violates the spirit. The competition may eventually outlaw it (PR #1430 has zero LGTMs and the comp owners haven't reviewed it yet — they may revert if they catch this interpretation).
+
+**Per-Sample SLOT** is even more borderline: optimizing 196K params on the val set itself, even if technically "after scoring", is essentially fitting a model TO the val set. The fact that the SLOT params are RESET per batch limits this somewhat, but still — this is the kind of thing the comp owners may want to outlaw.
+
+### What would happen if we ported these techniques?
+
+**Implementation cost**: All 3 techniques are EVAL-TIME. None affect train_loss. We could not validate them on our cheap-GPU loop. They would join the H100 escalation bundle (with Tilt #53, EMA #45, INT6 GPTQ #54).
+
+**Expected impact**: If 0.39642 is real, porting could give us a similar order-of-magnitude improvement. But we can't measure without H100.
+
+**Risk**: If the comp owners revert PR #1430 or update issue #677 to outlaw this class of trick, our port becomes worthless overnight. We'd have spent ~200 LOC + H100 time on a technique that doesn't make the leaderboard.
+
+### Decision
+
+**DO NOT PORT THIS FIRE**. Defensible reasons:
+
+1. **PR #1430 is unverified**: 0 LGTMs, 0 comp owner comments, 14h since creation. Maximum risk that it gets reverted.
+2. **All techniques are eval-time**: cannot validate on our loop. H100 escalation cost without verification of legality is poor risk/return.
+3. **The "spirit of #677" interpretation matters**: every prior audit fire flagged this PR as suspicious. The fact that the strict letter of the rules permits it doesn't mean the comp owners will accept it.
+4. **Better use of H100 budget**: our existing deferred specs (EMA, Tilt, INT6 GPTQ) are validated by MULTIPLE merged records. Lower risk, similar expected gain when stacked.
+
+### Watch action
+
+Created a new task to **monitor PR #1430 status** every 2 hours. If it gets a comp owner LGTM AND gets merged, immediately port at next research fire. If it gets reverted or the comp owners outlaw the technique, mark it dead.
+
+### Comp landscape after this audit
+
+- **Confirmed legitimate frontier**: PR #1437 = 1.078, PR #1423 = 1.079, PR #1099 (merged) = 1.113, PR #1019 (merged) = 1.115
+- **Suspicious frontier (unmerged)**: PR #1430 = 0.39642 (under review since 02:53 UTC)
+- **Our position**: train_loss 3.2734, projected val_bpb ~1.10-1.12 (untested at H100)
+
+### What this fire produced
+
+- **Confirmed PR #1430 is NOT merged** (correcting audit fire #4 error)
+- **Documented the legal-but-borderline analysis**
+- **Identified the H100-escalation deferred specs as the better near-term path**
+- **Created watch task for PR #1430 status**
+
+NO code patches pushed this fire. The techniques are unverified and unmeasurable on our loop.
