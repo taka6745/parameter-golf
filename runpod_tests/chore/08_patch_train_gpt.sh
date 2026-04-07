@@ -98,14 +98,14 @@ else:
 # Gated by USE_TORCH_COMPILE=1 (default ON), set to 0 to fall back to no-compile.
 # Mac LESSONS wishlist: 25-35% speedup.
 old_compile = "compiled_model = torch.compile(base_model, dynamic=False, fullgraph=True)"
-new_compile = """compiled_model = base_model if int(os.environ.get('USE_TORCH_COMPILE', '1')) == 0 else torch.compile(base_model, dynamic=True, fullgraph=False)  # PATCHED: dynamic=True for XSA/EL compat"""
+new_compile = """compiled_model = base_model if int(os.environ.get('USE_TORCH_COMPILE', '0')) == 0 else torch.compile(base_model, dynamic=True, fullgraph=False)  # PATCHED: dynamic=True for XSA/EL compat"""
 if old_compile in content:
     content = content.replace(old_compile, new_compile)
     print("  ✓ re-enabled torch.compile on model (dynamic=True, fullgraph=False)")
 
 # Also re-enable the optimizer compile (Newton-Schulz hot path)
 old_opt = "zeropower_via_newtonschulz5 = torch.compile(zeropower_via_newtonschulz5)"
-new_opt = """zeropower_via_newtonschulz5 = zeropower_via_newtonschulz5 if int(os.environ.get('USE_TORCH_COMPILE', '1')) == 0 else torch.compile(zeropower_via_newtonschulz5, dynamic=True)"""
+new_opt = """zeropower_via_newtonschulz5 = zeropower_via_newtonschulz5 if int(os.environ.get('USE_TORCH_COMPILE', '0')) == 0 else torch.compile(zeropower_via_newtonschulz5, dynamic=True)"""
 if old_opt in content:
     content = content.replace(old_opt, new_opt)
     print("  ✓ re-enabled torch.compile on Newton-Schulz (dynamic=True)")
