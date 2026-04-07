@@ -158,6 +158,51 @@ EMA, XSA, Parallel Muon are CONVERGENT best practices. We have NONE of them.
 7. **Patch 22: N-gram Tilt** — full math from subagent, ~80 lines
 8. **Patch 23: AR Self-Gen GPTQ calibration** — unique to #1 record, larger but well-defined
 
+## 2026-04-07 22:08 local — Research fire #2, Track A (arxiv) — MTP
+
+### Subagent F (DeepSeek MTP investigator) — pushed Patch 21
+
+DeepSeek-V3 (arxiv:2412.19437) introduced Multi-Token Prediction: K auxiliary heads that
+predict tokens i+2, i+3, ..., i+K+1 alongside the main head's i+1 prediction. Loss is
+`L = L_main + (λ/D) * sum(L_aux_k)`. Each aux head is a single Transformer Block reusing
+the SHARED tied embedding (no extra output head params). DeepSeek used D=1, λ schedule
+0.3 → 0.1 over training. Claimed ~0.3 BPB-equivalent improvement at 671B scale.
+
+### Why this might transfer to byte-level small LMs
+
+1. Byte-level has DENSER supervision (1 token ≈ 3.5 bytes) so each step provides more
+   gradient signal — MTP exploits this with K auxiliary signals per step.
+2. Our regime is COMPUTE-bound, not data-bound. MTP gives more gradient per step at
+   the cost of one extra Block forward.
+3. Pure auxiliary loss — degrades gracefully (set MTP_LOSS_WEIGHT=0 to disable).
+
+### Audit confirmation: zero open PRs use MTP
+
+Searched 100 open PRs at openai/parameter-golf for "MTP" / "multi-token" / "multitoken".
+Zero matches. Truly novel for the competition.
+
+### Patch 21 shipped this fire
+
+- New env vars: USE_MTP, MTP_NUM_HEADS=1, MTP_LOSS_WEIGHT=0.10
+- 1 extra Block (for K=1) at the end of GPT.__init__ — adds ~786K params (~5% overhead
+  on our 17M baseline) but no new attention heads
+- Captures pre-norm hidden state in forward, runs the MTP block on it, normalizes, projects
+  via tied embedding, computes shifted-target cross-entropy
+- Anchored on stable lines: `_init_weights` def, `final_norm.reshape`, and the cross_entropy
+  return — these are invariant under all prior patches
+- Idempotent via MTP_MARKER
+
+### Experiments queued (run with auto-pull)
+
+- MTP0_mtp_alone — MTP without n-gram (test isolated effect)
+- MTP1_mtp_plus_leaky_ng — MTP + leaky + L4-strong-weights (current best stack + MTP)
+- MTP2_mtp_strong_weight — MTP with λ=0.30 (DeepSeek's initial schedule value)
+
+### Falsification criterion
+
+If MTP1 train_loss is within 0.005 of CHAMP_L4 baseline (3.295) at 1500 steps, MTP doesn't
+help at our scale. If it's WORSE, MTP is interfering. Either way, set USE_MTP=0 and move on.
+
 User pushback: "I want research level findings, we don't want to be testing shit
 people already submitted, we want bleeding edge". Parallel residuals (Patch 13)
 is in 3+ existing PRs — that's PORTING, not research.

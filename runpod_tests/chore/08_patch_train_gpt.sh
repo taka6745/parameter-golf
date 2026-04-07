@@ -649,6 +649,93 @@ else:
         content = content.replace(old_ng_apply_block, new_ng_apply_block)
         print("  ✓ added ENTROPY_ADAPTIVE_NGRAM gating")
 
+# Patch 21: USE_MTP=1 → Multi-Token Prediction (DeepSeek-V3 style).
+# Adds K auxiliary heads that predict tokens i+2, i+3, ..., i+K+1 (vs main head's i+1).
+# Each head is a single Block that takes the main model's pre-norm residual and produces
+# its own logits via the SHARED tok_emb weight (tied embeddings, no extra params except
+# the K Block instances). Auxiliary loss = MTP_LOSS_WEIGHT * mean(aux_losses).
+#
+# Source: DeepSeek-V3 Technical Report (arxiv:2412.19437) — claims ~0.3 BPB equivalent
+# improvement at 671B scale via dense supervision. NOT in any open openai/parameter-golf
+# PR (audit Apr 7 confirmed zero matches for "MTP" / "multi-token" / "multitoken").
+#
+# Why this might transfer to byte-level small LMs:
+#   - Byte-level has denser supervision (1 token ≈ 3.5 bytes), so each step provides more
+#     information; MTP heads exploit this by adding K auxiliary signals per step.
+#   - Our regime is compute-bound, not data-bound. MTP gives more gradient per step.
+#   - Pure aux loss — sets to 0 if it hurts (degrades gracefully).
+#
+# Cost: K extra Block instances ≈ K × (4 * model_dim^2 + mlp_mult * model_dim^2) params.
+# For our 9L 512d 2x MLP, K=1 adds ~786K params (~5% overhead) but no new attention heads.
+# Idempotent via MTP_MARKER.
+if "MTP_MARKER" in content:
+    print("  ✓ MTP already applied")
+else:
+    # Init: add the MTP block list at the end of GPT.__init__ (after _init_weights call)
+    # We anchor on the last 2 lines of __init__ which are stable: the n-gram fourgram load
+    # plus the _init_weights call. To avoid brittleness, we anchor on _init_weights call only.
+    old_init_end = """        self._init_weights()
+
+    def _init_weights(self) -> None:"""
+    new_init_end = """        # MTP_MARKER: Multi-Token Prediction auxiliary heads
+        self._mtp_enabled = bool(int(os.environ.get("USE_MTP", "0")))
+        self._mtp_num_heads = int(os.environ.get("MTP_NUM_HEADS", "1"))
+        self._mtp_loss_weight = float(os.environ.get("MTP_LOSS_WEIGHT", "0.10"))
+        if self._mtp_enabled and self._mtp_num_heads > 0:
+            self.mtp_blocks = nn.ModuleList([
+                Block(model_dim, num_heads, num_kv_heads, mlp_mult, rope_base, qk_gain_init, layer_idx=num_layers + _k)
+                for _k in range(self._mtp_num_heads)
+            ])
+        else:
+            self.mtp_blocks = None
+        self._init_weights()
+
+    def _init_weights(self) -> None:"""
+    if old_init_end in content:
+        content = content.replace(old_init_end, new_init_end)
+        print("  ✓ added MTP init")
+
+    # Apply: capture pre-norm residual + compute aux losses inside forward.
+    # Anchor on the line that reshapes to (B*S, D) — stable across all patches.
+    old_reshape = """        x = self.final_norm(x).reshape(-1, x.size(-1))
+        targets = target_ids.reshape(-1)"""
+    new_reshape = """        # MTP_MARKER apply: save pre-norm hidden state for MTP heads
+        _mtp_hidden = x if (self._mtp_enabled and self.mtp_blocks is not None) else None
+        x = self.final_norm(x).reshape(-1, x.size(-1))
+        targets = target_ids.reshape(-1)"""
+    if old_reshape in content:
+        content = content.replace(old_reshape, new_reshape)
+        print("  ✓ added MTP hidden state capture")
+
+    # Insert MTP loss computation right before the final return statement of forward().
+    # Anchor on the F.cross_entropy return line which is stable across n-gram patches.
+    old_return = """        return F.cross_entropy(logits.float(), targets, reduction="mean")"""
+    new_return = """        _main_loss = F.cross_entropy(logits.float(), targets, reduction="mean")
+        # MTP_MARKER apply: compute aux losses from MTP blocks
+        if self._mtp_enabled and self.mtp_blocks is not None and _mtp_hidden is not None:
+            _B, _S = input_ids.shape
+            _D = _mtp_hidden.size(-1)
+            _mtp_total = torch.zeros((), device=_main_loss.device, dtype=_main_loss.dtype)
+            for _k, _mtp_block in enumerate(self.mtp_blocks):
+                _shift = _k + 1  # MTP head k predicts position i+1+k+1 = i+(k+2)
+                if _shift >= _S:
+                    continue
+                _mtp_x = _mtp_block(_mtp_hidden, x0)  # (B, S, D)
+                _mtp_x = self.final_norm(_mtp_x)
+                _mtp_x_2d = _mtp_x[:, :_S - _shift, :]  # (B, S-shift, D)
+                if self.tie_embeddings:
+                    _mtp_logits = F.linear(_mtp_x_2d.reshape(-1, _D), self.tok_emb.weight)
+                else:
+                    _mtp_logits = self.lm_head(_mtp_x_2d.reshape(-1, _D))
+                _mtp_logits = self.logit_softcap * torch.tanh(_mtp_logits / self.logit_softcap)
+                _mtp_targets = target_ids[:, _shift:].reshape(-1)
+                _mtp_total = _mtp_total + F.cross_entropy(_mtp_logits.float(), _mtp_targets, reduction="mean")
+            _main_loss = _main_loss + self._mtp_loss_weight * (_mtp_total / max(self._mtp_num_heads, 1))
+        return _main_loss"""
+    if old_return in content:
+        content = content.replace(old_return, new_return)
+        print("  ✓ added MTP forward + auxiliary loss")
+
 # Patch 19: USE_PARTIAL_ROPE=1 → rotate only first ROPE_DIMS dims of each head, leave the rest unrotated.
 # In merged records #1019 (val_bpb 1.1147 — the literal #1 SOTA) and #315 (1.1248).
 # Rationale: rotary positional info is only needed for the first few dims; leaving the rest
