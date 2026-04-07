@@ -351,6 +351,85 @@ else:
         content = content.replace(old_softcap, new_softcap)
         print("  ✓ added NGRAM_BIAS forward pass")
 
+# Patch 12: USE_NGRAM_GATE=1 → LEARNED per-position scalar gate over n-gram bias.
+# NOVEL: nobody in the competition (or any PR I can find) has used a learned
+# per-position gate over the n-gram logit bias. The closest is fixed-weight blends
+# (cmix-style logistic mixing) which Mac §32 found "negligible vs additive". But
+# that was for FIXED gate weights — a LEARNED PER-TOKEN gate is fundamentally
+# different and adds only 513 params (one Linear: model_dim→1).
+#
+# Idea:
+#   gate = sigmoid(Linear(final_residual))  # (B*S, 1) in [0, 1]
+#   logits = logits + gate * (w_bi * bigram_bias + w_tri * trigram_bias + w_four * fourgram_bias)
+#
+# At init the linear is zero so gate = 0.5 — model starts with half-strength bias
+# and learns to up-weight when n-gram is reliable, down-weight when residual is more
+# confident. This is the "Nacrith-style learned mixer" RESEARCH.md §14 mentioned
+# but applied to additive bias instead of full distribution mixing.
+#
+# Idempotent via NGRAM_GATE_MARKER.
+if "NGRAM_GATE_MARKER" in content:
+    print("  ✓ ngram gate already applied")
+else:
+    # Add the gate Linear in __init__ right next to the wavelet flag
+    old_wave_init = """        self._wavelet_enabled = bool(int(os.environ.get("USE_WAVELET", "0")))
+        self._wavelet_mix_ratio = float(os.environ.get("WAVELET_MIX_RATIO", "0.20"))"""
+    new_wave_init = """        self._wavelet_enabled = bool(int(os.environ.get("USE_WAVELET", "0")))
+        self._wavelet_mix_ratio = float(os.environ.get("WAVELET_MIX_RATIO", "0.20"))
+        # NGRAM_GATE_MARKER: learned per-position gate over n-gram bias
+        self._ngram_gate_enabled = bool(int(os.environ.get("USE_NGRAM_GATE", "0")))
+        if self._ngram_gate_enabled:
+            self.ngram_gate_proj = CastedLinear(model_dim, 1, bias=True)
+            self.ngram_gate_proj._zero_init = True"""
+    if old_wave_init in content:
+        content = content.replace(old_wave_init, new_wave_init)
+        print("  ✓ added NGRAM_GATE init")
+
+    # Wrap the bigram/trigram/fourgram lookups in a gate factor
+    old_apply = """        logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
+        # NGRAM_BIAS_MARKER apply: blend in precomputed n-gram log-probs
+        if self._ngram_enabled and self._bigram_tab.numel() > 1:"""
+    new_apply = """        logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
+        # NGRAM_GATE_MARKER apply: optional learned per-position gate factor
+        _gate = None
+        if self._ngram_gate_enabled and self._ngram_enabled:
+            _gate = torch.sigmoid(self.ngram_gate_proj(x.detach())).float()  # (B*S, 1) in [0,1]
+        # NGRAM_BIAS_MARKER apply: blend in precomputed n-gram log-probs
+        if self._ngram_enabled and self._bigram_tab.numel() > 1:"""
+    if old_apply in content:
+        content = content.replace(old_apply, new_apply)
+        print("  ✓ added NGRAM_GATE apply")
+
+    # Multiply the bigram bias by gate
+    old_bi_apply = """            logits = logits + self._ngram_w_bigram * self._bigram_tab[_h_bi]"""
+    new_bi_apply = """            _bi_bias = self._ngram_w_bigram * self._bigram_tab[_h_bi]
+            if _gate is not None:
+                _bi_bias = _gate * _bi_bias
+            logits = logits + _bi_bias"""
+    if old_bi_apply in content:
+        content = content.replace(old_bi_apply, new_bi_apply)
+        print("  ✓ wrapped bigram lookup with gate")
+
+    # Multiply the trigram bias by gate
+    old_tri_apply = """                logits = logits + self._ngram_w_trigram * self._trigram_tab[_h_tri]"""
+    new_tri_apply = """                _tri_bias = self._ngram_w_trigram * self._trigram_tab[_h_tri]
+                if _gate is not None:
+                    _tri_bias = _gate * _tri_bias
+                logits = logits + _tri_bias"""
+    if old_tri_apply in content:
+        content = content.replace(old_tri_apply, new_tri_apply)
+        print("  ✓ wrapped trigram lookup with gate")
+
+    # Multiply the fourgram bias by gate
+    old_four_apply = """                logits = logits + self._ngram_w_fourgram * self._fourgram_tab[_h_four]"""
+    new_four_apply = """                _four_bias = self._ngram_w_fourgram * self._fourgram_tab[_h_four]
+                if _gate is not None:
+                    _four_bias = _gate * _four_bias
+                logits = logits + _four_bias"""
+    if old_four_apply in content:
+        content = content.replace(old_four_apply, new_four_apply)
+        print("  ✓ wrapped fourgram lookup with gate")
+
 # Patch 11: USE_SMEAR_GATE=1 → smear current token activations with previous token before MLP.
 # Mac validated -0.019 BPB at 500 steps (LESSONS.md §3 — second-best non-tokenizer Mac trick).
 # Implementation: x_for_mlp = alpha * x + (1-alpha) * shift_right(x). Causal, no future leak.
