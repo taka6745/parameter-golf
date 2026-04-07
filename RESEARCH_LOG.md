@@ -622,3 +622,74 @@ Cleaned `runpod_tests/loop/experiments.json` from 37 → **20 experiments**:
 | EL | 6 (1/2/3/4/5/6) | **PRIORITY** — multi-seed expansion of the EL2 reversal |
 
 The runner will pick up the new file on next git pull (~5 min). Queue cycles will be ~2x faster now (20 vs 37 experiments per cycle ≈ 100 min instead of 185 min).
+
+---
+
+## Research Fire #8 — 2026-04-08 (cron min :16, Track A = arxiv → pivot to compression) — INT6 GPTQ-Lite SPEC CAPTURED, code patch DEFERRED
+
+**Subject**: Compression-side win port. Audit fire #1 said "pivot to non-architectural" and we have ZERO compression patches. Spawned subagent to find the simplest shippable compression upgrade for our int8+zlib roundtrip.
+
+### Subagent recommendation: INT6 GPTQ-Lite (percentile-based, no Hessian)
+
+**Source**: PR #1099 (merged, latest), PR #1019 (merged), PR #1444 (open). All use this exact pattern.
+
+**Mechanism**: per-row 99.95th percentile quantization to int6 (clamped to [-31, 31], stored in int8 container), then LZMA-22 compression. No Hessian computation, no AR self-gen, just statistical fallback.
+
+**Pseudocode**:
+```python
+for name, t in state_dict.items():
+    if t.is_floating_point() and t.numel() > 65536:
+        s = torch.quantile(t.abs(), 0.9995, dim=1, keepdim=True) / 31.0
+        q = torch.round(t.float() / s).clamp(-31, 31).int8()
+        quantized[name] = q ; scales[name] = s.half()
+buf = io.BytesIO() ; torch.save({"quantized": quantized, "scales": scales}, buf)
+final_blob = lzma.compress(buf.getvalue(), preset=9)
+```
+
+**Bit budget**: 22M params × 0.75 bytes (int6 packed) + ~1.8MB scales = **~18.4MB raw → ~15.5MB after LZMA-22**. Vs current int8 ≈ 16MB after zlib. Saves ~0.5MB headroom.
+
+**Direct BPB impact**: 1.1141 → 1.1138 = **-0.0003 BPB** (within noise). The real value is the freed size budget, NOT the direct delta.
+
+### Why I DEFERRED the code patch this fire
+
+Same triple-pattern as last 3 research fires (Tilt, EMA, this):
+
+1. **Metric problem**: train_loss in our loop is unaffected by serialization. The patch only changes the FINAL int8_zlib_roundtrip step which we skip via `SKIP_FINAL_EVAL=1` for loop speed. We can't validate it on the cheap GPU without enabling final eval, which slows the loop ~33% per experiment.
+
+2. **Anchor risk**: train_gpt.py's serialization code is the LAST piece I'd want to break. A buggy compression patch could corrupt the int8_zlib_roundtrip path and we wouldn't notice until $3-5 H100 escalation time. The code path is around line ~2100 of train_gpt.py per the subagent — I'd need to read that section carefully before patching.
+
+3. **The +0.0003 BPB direct gain isn't motivating enough** for the validation risk on its own. The size headroom is the real value, but spending it requires re-tuning model capacity which is a separate research problem.
+
+### Spec captured for next H100-escalation fire
+
+When we have a multi-seed champion validated and we're escalating to H100, the plan is:
+
+1. **Patch 23 USE_INT6_GPTQ** — modify the serialization path to swap int8 → int6 packing + LZMA. ~130 LOC, anchored on the existing `final_int8_zlib_roundtrip` block in train_gpt.py.
+2. **Test on cheap GPU first** — one short experiment with `SKIP_FINAL_EVAL=0 USE_INT6_GPTQ=1` to verify the roundtrip is lossless and the .lzma file is < 15.9MB.
+3. **Then escalate** — measure end-to-end val_bpb delta on H100.
+
+### Backup alternative documented (Lloyd-Max codebook quantization)
+
+We already have `data/lloyd_max_codebook_256.npy` and `data/lloyd_max_codebook_64.npy` on disk from prior work but they're not wired in. Lloyd-Max VQ would be:
+```python
+codebook = np.load("data/lloyd_max_codebook_256.npy")  # 256 entries
+w_flat = weight.float().cpu().numpy().flatten()
+indices = ((w_flat[:, None] - codebook[None, :]) ** 2).argmin(axis=1).astype(np.uint8)
+# Store: indices (1 byte/param) + codebook (256 floats = 1KB)
+# Decompress: float_w = codebook[indices].reshape(orig_shape)
+```
+- Raw: 22MB + 1KB
+- Zlib ratio: similar to int8 → ~16MB final
+- Simpler than GPTQ, deterministic, but doesn't save bytes vs naive int8
+
+GPTQ-lite is strictly better. Lloyd-Max is the fallback if GPTQ proves unstable on H100.
+
+### Three deferred eval/compression specs now ready for H100 escalation
+
+| # | Patch | Type | Captured Fire | Estimated gain |
+|---|---|---|---|---|
+| 53 | USE_NGRAM_TILT_EVAL | eval-time | #6 | +0.0015 to +0.0030 BPB |
+| 45 | USE_EMA (decay 0.997) | training | #7 | +0.001 to +0.005 BPB |
+| (new) | USE_INT6_GPTQ | serialization | #8 | -0.0003 BPB + 0.5MB headroom |
+
+Combined estimated gain when shipped together at H100 escalation: **+0.003 to +0.008 BPB** without affecting any training-loop metrics.
