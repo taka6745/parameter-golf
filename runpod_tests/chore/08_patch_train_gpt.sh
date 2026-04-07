@@ -1231,6 +1231,39 @@ else:
     else:
         print("  ✗ DEPTH_RECUR apply anchor not found — skipping apply")
 
+# Patch 25: USE_NORMUON=1 → per-row normalization AFTER Newton-Schulz orthogonalization.
+# From Mac SETUP.md §50 + LESSONS.md §35: "Per-row norm after Newton-Schulz — not in any
+# PR. NorMuon Yes (per-row normalization) -0.132 BPB" — claimed as the BIGGEST optimizer
+# win in our Mac research history that we never ported. ~5 LOC.
+#
+# Math: NS produces an approximately orthogonal matrix where rows have norm ≈ 1.
+# Per-row normalization POST-NS enforces the unit-norm property exactly, tightening
+# the orthogonalization. Different from MuonEq-R (which normalizes BEFORE NS).
+#
+# Distinct from Patch 17 Mousse (row+col preconditioning, before NS) and Patch 18
+# MuonEq-R (row-only normalization, before NS). NorMuon is row-only AFTER NS.
+#
+# Idempotent via NORMUON_MARKER. Anchored on the post-NS scale-correction line which
+# is invariant under all 24 prior patches (Mousse/MuonEq-R touch BEFORE NS, not after).
+if "NORMUON_MARKER" in content:
+    print("  ✓ NorMuon already applied")
+else:
+    old_normuon = """                    g = zeropower_via_newtonschulz5(g, steps=backend_steps)
+                    # Scale correction from Muon reference implementations.
+                    g *= max(1, g.size(0) / g.size(1)) ** 0.5"""
+    new_normuon = """                    g = zeropower_via_newtonschulz5(g, steps=backend_steps)
+                    # NORMUON_MARKER: per-row normalization AFTER Newton-Schulz (Mac SETUP §50)
+                    if int(os.environ.get("USE_NORMUON", "0")):
+                        _post_norm = g.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+                        g = g / _post_norm
+                    # Scale correction from Muon reference implementations.
+                    g *= max(1, g.size(0) / g.size(1)) ** 0.5"""
+    if old_normuon in content:
+        content = content.replace(old_normuon, new_normuon)
+        print("  ✓ added NORMUON post-NS row normalization")
+    else:
+        print("  ✗ NORMUON anchor not found — skipping")
+
 # Patch 21: USE_XSA=1 → Exclusive Self Attention (orthogonal projection removal).
 # From arxiv:2603.09078 "Exclusive Self Attention: Orthogonal Projection as an
 # Architectural Inductive Bias" (Feb 2026, Shuangfei Zhai). Used in 100+ open PRs and

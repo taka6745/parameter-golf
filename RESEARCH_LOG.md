@@ -1747,3 +1747,51 @@ Expected H100 val_bpb: ~1.07-1.10 (extrapolating from 3.2595 train_loss vs comp 
 ### Spend impact
 
 Pod uptime ~8h 16min × $0.30/h ≈ $2.48 raw GPU + $1.10 H100 burn + $2.05 ops = **$5.65 / $36 (15.7%)**. Far below the $25 flag threshold.
+
+---
+
+## Research Fire #18 — 2026-04-08 (cron min :17, Track A) — Patch 25 USE_NORMUON SHIPPED (Mac biggest unported optimizer win)
+
+**Subject**: Mac SETUP §50 + LESSONS §35 documented NorMuon as the biggest unported optimizer-side win at -0.132 BPB. We never shipped it. Same anchor template as Mousse (Patch 17) and MuonEq-R (Patch 18) — easy 5-LOC port.
+
+### Mechanism
+
+NorMuon = per-row normalization AFTER Newton-Schulz orthogonalization. Newton-Schulz produces an approximately orthogonal matrix where rows have norm ≈ 1. NorMuon enforces the unit-norm property exactly, tightening the orthogonalization.
+
+Distinct from:
+- **Mousse** (Patch 17): row+col preconditioning, BEFORE NS
+- **MuonEq-R** (Patch 18): row-only normalization, BEFORE NS
+- **NorMuon** (this patch): row-only normalization, AFTER NS
+
+### Patch 25 USE_NORMUON code (5 LOC)
+
+```python
+g = zeropower_via_newtonschulz5(g, steps=backend_steps)
+# NORMUON_MARKER: per-row normalization AFTER Newton-Schulz (Mac SETUP §50)
+if int(os.environ.get("USE_NORMUON", "0")):
+    _post_norm = g.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+    g = g / _post_norm
+# Scale correction from Muon reference implementations.
+g *= max(1, g.size(0) / g.size(1)) ** 0.5
+```
+
+Anchored on the post-NS scale-correction line which is invariant under all 24 prior patches (Mousse and MuonEq-R touch BEFORE NS, not after).
+
+### 4 NM experiments queued
+
+- **NM0_normuon_alone** — NorMuon + L4 weights baseline
+- **NM1_normuon_plus_coprime** — stack with Coprime Stride (current top-1 base)
+- **NM2_normuon_full_stack** — NorMuon + Coprime + EngramLite (the validated CS3 stack)
+- **NM3_normuon_full_with_xsa** — full stack including XSA
+
+### Why this matters
+
+The Mac claim is **-0.132 BPB**, which would be HUGE if it transfers. Even if it only transfers at 25% (analogous to other optimizer ports), that's still -0.033 BPB which would put us in the high-1.06s range on H100.
+
+If it lands on the loop within 30 min, the H100 escalation case becomes overwhelming.
+
+### Risk assessment
+
+Same risk profile as Mousse and MuonEq-R: optimizer-side modification with env var gate. If it doesn't help, the experiments land at ~3.27 (within noise). If it helps, we see a clear improvement on top of the validated CS3 = 3.2595 baseline.
+
+NorMuon is the LAST major Mac-validated optimizer technique we haven't tried.
