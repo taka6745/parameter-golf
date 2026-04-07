@@ -649,6 +649,109 @@ else:
         content = content.replace(old_ng_apply_block, new_ng_apply_block)
         print("  ✓ added ENTROPY_ADAPTIVE_NGRAM gating")
 
+# Patch 19: USE_PARTIAL_ROPE=1 → rotate only first ROPE_DIMS dims of each head, leave the rest unrotated.
+# In merged records #1019 (val_bpb 1.1147 — the literal #1 SOTA) and #315 (1.1248).
+# Rationale: rotary positional info is only needed for the first few dims; leaving the rest
+# free of positional bias improves length generalization (the unrotated dims attend purely on
+# content, the rotated dims attend on relative position). Zero params, free quality.
+# Idempotent via PARTIAL_ROPE_MARKER.
+if "PARTIAL_ROPE_MARKER" in content:
+    print("  ✓ partial rope already applied")
+else:
+    old_apply_rotary = """def apply_rotary_emb(x: Tensor, cos: Tensor, sin: Tensor) -> Tensor:
+    half = x.size(-1) // 2
+    x1, x2 = x[..., :half], x[..., half:]
+    return torch.cat((x1 * cos + x2 * sin, x1 * (-sin) + x2 * cos), dim=-1)"""
+    new_apply_rotary = """def apply_rotary_emb(x: Tensor, cos: Tensor, sin: Tensor) -> Tensor:
+    # PARTIAL_ROPE_MARKER: optionally rotate only the first PARTIAL_ROPE_DIMS dims of each head
+    _partial = int(os.environ.get("PARTIAL_ROPE_DIMS", "0"))
+    if _partial > 0 and _partial < x.size(-1):
+        rot, plain = x[..., :_partial], x[..., _partial:]
+        half = rot.size(-1) // 2
+        r1, r2 = rot[..., :half], rot[..., half:]
+        cos_r = cos[..., :half] if cos.size(-1) >= half else cos
+        sin_r = sin[..., :half] if sin.size(-1) >= half else sin
+        rotated = torch.cat((r1 * cos_r + r2 * sin_r, r1 * (-sin_r) + r2 * cos_r), dim=-1)
+        return torch.cat((rotated, plain), dim=-1)
+    half = x.size(-1) // 2
+    x1, x2 = x[..., :half], x[..., half:]
+    return torch.cat((x1 * cos + x2 * sin, x1 * (-sin) + x2 * cos), dim=-1)"""
+    if old_apply_rotary in content:
+        content = content.replace(old_apply_rotary, new_apply_rotary)
+        print("  ✓ added PARTIAL_ROPE branch in apply_rotary_emb")
+
+# Patch 20: USE_LN_SCALE=1 → scale RMSNorm output by 1/sqrt(layer_idx+1) at each block.
+# In PRs #1019 + #315. Damps the contribution of deeper layers, stabilizing training.
+# Zero params, ~5-line change. Mac never tested. Free quality win in 2+ merged records.
+# Requires Block to know its layer_idx, so we add it to Block.__init__ signature.
+# Idempotent via LN_SCALE_MARKER.
+if "LN_SCALE_MARKER" in content:
+    print("  ✓ LN scale already applied")
+else:
+    # Add layer_idx to Block.__init__ + store it + apply scale in forward
+    old_block_init = """class Block(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        num_kv_heads: int,
+        mlp_mult: int,
+        rope_base: float,
+        qk_gain_init: float,
+    ):
+        super().__init__()
+        self.attn_norm = RMSNorm()"""
+    new_block_init = """class Block(nn.Module):
+    def __init__(
+        self,
+        dim: int,
+        num_heads: int,
+        num_kv_heads: int,
+        mlp_mult: int,
+        rope_base: float,
+        qk_gain_init: float,
+        layer_idx: int = 0,
+    ):
+        super().__init__()
+        # LN_SCALE_MARKER: store layer index for 1/sqrt(layer+1) RMSNorm scaling
+        self._layer_idx = layer_idx
+        self.attn_norm = RMSNorm()"""
+    if old_block_init in content:
+        content = content.replace(old_block_init, new_block_init)
+        print("  ✓ added LN_SCALE layer_idx storage")
+
+    # Wire layer_idx through GPT.__init__ Block creation
+    old_block_creation = """        self.blocks = nn.ModuleList(
+            [
+                Block(
+                    model_dim,
+                    num_heads,
+                    num_kv_heads,
+                    mlp_mult,
+                    rope_base,
+                    qk_gain_init,
+                )
+                for i in range(num_layers)
+            ]
+        )"""
+    new_block_creation = """        self.blocks = nn.ModuleList(
+            [
+                Block(
+                    model_dim,
+                    num_heads,
+                    num_kv_heads,
+                    mlp_mult,
+                    rope_base,
+                    qk_gain_init,
+                    layer_idx=i,
+                )
+                for i in range(num_layers)
+            ]
+        )"""
+    if old_block_creation in content:
+        content = content.replace(old_block_creation, new_block_creation)
+        print("  ✓ wired LN_SCALE layer_idx into Block creation")
+
 # Patch 13: USE_PARALLEL_RESIDUALS=1 → compute attn and mlp in parallel from the same input.
 # Found in research cron #1 (Apr 7 21:23 local) by mining recent openai/parameter-golf PRs:
 #   PR #1437: Record SP8192 + Parallel Residuals + 3-Layer Recurrence — val_bpb 1.07800
