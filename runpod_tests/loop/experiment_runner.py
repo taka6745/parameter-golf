@@ -34,8 +34,8 @@ LEADERBOARD_FILE = LOOP_DIR / "leaderboard.txt"
 # Expect step time to rise from ~190ms to ~600-800ms but utilization >85%.
 # Wallclock budget bumped 240→480s to fit the bigger steps.
 BASE_ENV = {
-    "TRAIN_SEQ_LEN": "512",
-    "TRAIN_BATCH_TOKENS": "32768",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
     "VAL_BATCH_SIZE": "131072",
     "VAL_LOSS_EVERY": "0",
     "SKIP_FINAL_EVAL": "1",  # train_loss only — much faster signal

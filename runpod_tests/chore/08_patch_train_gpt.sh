@@ -91,23 +91,24 @@ if old_block in content:
 else:
     print("  ✗ couldn't find SDP call to patch (already different?)")
 
-# Patch 2: torch.compile RE-ENABLED with looser mode (fixes the enable_gqa issue
-# without disabling compile entirely). Original `dynamic=False, fullgraph=True` was
-# strict-mode which broke on enable_gqa. Default mode handles it gracefully.
-# Gated by USE_TORCH_COMPILE=0 (default ON) — set USE_TORCH_COMPILE=0 to fall back
-# to no-compile if a specific run hits an issue. Mac LESSONS wishlist: 25-35% speedup.
+# Patch 2: torch.compile RE-ENABLED with dynamic=True + fullgraph=False to handle
+# XSA/EngramLite forward modifications. SPEED4/5 crashed in <30s with default mode
+# because the strict shape tracing failed on the modified attention path. dynamic=True
+# allows dynamic shapes; fullgraph=False allows fallback to eager for unsupported ops.
+# Gated by USE_TORCH_COMPILE=1 (default ON), set to 0 to fall back to no-compile.
+# Mac LESSONS wishlist: 25-35% speedup.
 old_compile = "compiled_model = torch.compile(base_model, dynamic=False, fullgraph=True)"
-new_compile = """compiled_model = base_model if int(os.environ.get('USE_TORCH_COMPILE', '1')) == 0 else torch.compile(base_model)  # PATCHED: re-enabled with default mode"""
+new_compile = """compiled_model = base_model if int(os.environ.get('USE_TORCH_COMPILE', '1')) == 0 else torch.compile(base_model, dynamic=True, fullgraph=False)  # PATCHED: dynamic=True for XSA/EL compat"""
 if old_compile in content:
     content = content.replace(old_compile, new_compile)
-    print("  ✓ re-enabled torch.compile on model (default mode)")
+    print("  ✓ re-enabled torch.compile on model (dynamic=True, fullgraph=False)")
 
 # Also re-enable the optimizer compile (Newton-Schulz hot path)
 old_opt = "zeropower_via_newtonschulz5 = torch.compile(zeropower_via_newtonschulz5)"
-new_opt = """zeropower_via_newtonschulz5 = zeropower_via_newtonschulz5 if int(os.environ.get('USE_TORCH_COMPILE', '1')) == 0 else torch.compile(zeropower_via_newtonschulz5)"""
+new_opt = """zeropower_via_newtonschulz5 = zeropower_via_newtonschulz5 if int(os.environ.get('USE_TORCH_COMPILE', '1')) == 0 else torch.compile(zeropower_via_newtonschulz5, dynamic=True)"""
 if old_opt in content:
     content = content.replace(old_opt, new_opt)
-    print("  ✓ re-enabled torch.compile on Newton-Schulz")
+    print("  ✓ re-enabled torch.compile on Newton-Schulz (dynamic=True)")
 
 # Patch 2b: Turbo-Muon — env-var override for Newton-Schulz step count.
 # Mac LESSONS §35: "Free speedup, no quality loss, -0.026 BPB at NS_STEPS=4 vs 5".
