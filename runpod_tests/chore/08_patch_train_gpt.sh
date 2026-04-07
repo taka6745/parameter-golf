@@ -228,6 +228,90 @@ else:
     else:
         print("  ! couldn't find unclamped phase transition block — clamp not applied")
 
+# Patch 6: USE_NGRAM_BIAS=1 → load bigram/trigram/fourgram tables and add as logit bias
+# Tables are built by 04_build_ngrams.py:
+#   bigram_tab_1024v.npy   shape (HASH=2048, V=1024) — log P(next | prev)
+#   trigram_logprobs_1024v.npy   shape (2048, 1024) — log P(next | prev2, prev1)
+#   fourgram_logprobs_1024v.npy  shape (2048, 1024) — log P(next | prev3, prev2, prev1)
+# Hash polynomials match 04_build_ngrams.py exactly:
+#   bigram:   (prev * 36313) % 2048
+#   trigram:  (prev2 * 36313 + prev1 * 27191) % 2048
+#   fourgram: (prev3 * 36313 + prev2 * 27191 + prev1 * 51497) % 2048
+# Mac-validated: bigram alone -0.01 BPB, +trigram another -0.02, +fourgram another -0.02.
+# Idempotent via NGRAM_BIAS_MARKER.
+if "NGRAM_BIAS_MARKER" in content:
+    print("  ✓ ngram bias already applied")
+else:
+    # Inject buffer loading + weights right after self._init_weights() at end of __init__
+    old_init_end = """        self.lm_head = None if tie_embeddings else CastedLinear(model_dim, vocab_size, bias=False)
+        if self.lm_head is not None:
+            self.lm_head._zero_init = True
+        self._init_weights()"""
+    new_init_end = """        self.lm_head = None if tie_embeddings else CastedLinear(model_dim, vocab_size, bias=False)
+        if self.lm_head is not None:
+            self.lm_head._zero_init = True
+        # NGRAM_BIAS_MARKER: load precomputed n-gram log-prob tables as buffers
+        self._ngram_enabled = bool(int(os.environ.get("USE_NGRAM_BIAS", "0")))
+        self._ngram_w_bigram = float(os.environ.get("NGRAM_W_BIGRAM", "0.20"))
+        self._ngram_w_trigram = float(os.environ.get("NGRAM_W_TRIGRAM", "0.15"))
+        self._ngram_w_fourgram = float(os.environ.get("NGRAM_W_FOURGRAM", "0.10"))
+        self._ngram_hash = 2048  # must match 04_build_ngrams.py HASH_BUCKETS
+        self.register_buffer("_bigram_tab", torch.zeros(1, dtype=torch.float32), persistent=False)
+        self.register_buffer("_trigram_tab", torch.zeros(1, dtype=torch.float32), persistent=False)
+        self.register_buffer("_fourgram_tab", torch.zeros(1, dtype=torch.float32), persistent=False)
+        if self._ngram_enabled:
+            import numpy as _np
+            try:
+                _bg = _np.load("./data/bigram_tab_{}v.npy".format(vocab_size))
+                self._bigram_tab = torch.from_numpy(_bg).float()
+                print("NGRAM_BIAS: loaded bigram", _bg.shape, "w=", self._ngram_w_bigram)
+            except Exception as _e:
+                print("NGRAM_BIAS: bigram load failed:", _e)
+            try:
+                _tg = _np.load("./data/trigram_logprobs_{}v.npy".format(vocab_size))
+                self._trigram_tab = torch.from_numpy(_tg).float()
+                print("NGRAM_BIAS: loaded trigram", _tg.shape, "w=", self._ngram_w_trigram)
+            except Exception as _e:
+                print("NGRAM_BIAS: trigram load failed:", _e)
+            try:
+                _fg = _np.load("./data/fourgram_logprobs_{}v.npy".format(vocab_size))
+                self._fourgram_tab = torch.from_numpy(_fg).float()
+                print("NGRAM_BIAS: loaded fourgram", _fg.shape, "w=", self._ngram_w_fourgram)
+            except Exception as _e:
+                print("NGRAM_BIAS: fourgram load failed:", _e)
+        self._init_weights()"""
+    if old_init_end in content:
+        content = content.replace(old_init_end, new_init_end)
+        print("  ✓ added NGRAM_BIAS init/loading")
+
+    # Inject bias-add right after softcap, before cross_entropy
+    old_softcap = """        logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
+        return F.cross_entropy(logits.float(), targets, reduction="mean")"""
+    new_softcap = """        logits = self.logit_softcap * torch.tanh(logits_proj / self.logit_softcap)
+        # NGRAM_BIAS_MARKER apply: blend in precomputed n-gram log-probs
+        if self._ngram_enabled and self._bigram_tab.numel() > 1:
+            _ids_flat = input_ids.reshape(-1).long()  # (B*S,)
+            _H = self._ngram_hash
+            _h_bi = (_ids_flat * 36313) % _H
+            logits = logits + self._ngram_w_bigram * self._bigram_tab[_h_bi]
+            if self._trigram_tab.numel() > 1:
+                _B, _S = input_ids.shape
+                _ids2 = input_ids
+                _prev2 = torch.cat([torch.zeros(_B, 1, device=_ids2.device, dtype=_ids2.dtype), _ids2[:, :-1]], dim=1).reshape(-1).long()
+                _h_tri = (_prev2 * 36313 + _ids_flat * 27191) % _H
+                logits = logits + self._ngram_w_trigram * self._trigram_tab[_h_tri]
+            if self._fourgram_tab.numel() > 1:
+                _B, _S = input_ids.shape
+                _ids2 = input_ids
+                _prev3 = torch.cat([torch.zeros(_B, 2, device=_ids2.device, dtype=_ids2.dtype), _ids2[:, :-2]], dim=1).reshape(-1).long()
+                _prev2b = torch.cat([torch.zeros(_B, 1, device=_ids2.device, dtype=_ids2.dtype), _ids2[:, :-1]], dim=1).reshape(-1).long()
+                _h_four = (_prev3 * 36313 + _prev2b * 27191 + _ids_flat * 51497) % _H
+                logits = logits + self._ngram_w_fourgram * self._fourgram_tab[_h_four]
+        return F.cross_entropy(logits.float(), targets, reduction="mean")"""
+    if old_softcap in content:
+        content = content.replace(old_softcap, new_softcap)
+        print("  ✓ added NGRAM_BIAS forward pass")
+
 with open("train_gpt.py", "w") as f:
     f.write(content)
 PYEOF
