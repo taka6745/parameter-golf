@@ -69,14 +69,34 @@ def load_results() -> list[dict]:
 
 
 def pick_next(experiments: list[dict], results: list[dict]) -> dict:
-    """Pick the experiment with the fewest completed (non-crashed) runs."""
-    counts: dict[str, int] = {}
+    """Pick the experiment with the fewest TOTAL attempts (success + crash).
+
+    Crash attempts also count — otherwise a broken experiment that crashes in
+    2 seconds will get picked forever, burning compute and never letting other
+    experiments run. We DO down-weight successes by counting them as 1 and
+    crashes as 1 attempt (not 0), so the round-robin still progresses.
+    """
+    success_counts: dict[str, int] = {}
+    crash_counts: dict[str, int] = {}
     for r in results:
+        name = r.get("name")
         if r.get("exit_code") == 0 and r.get("train_loss") is not None:
-            counts[r["name"]] = counts.get(r["name"], 0) + 1
+            success_counts[name] = success_counts.get(name, 0) + 1
+        else:
+            crash_counts[name] = crash_counts.get(name, 0) + 1
     indexed = list(enumerate(experiments))
-    indexed.sort(key=lambda iv: (counts.get(iv[1]["name"], 0), iv[0]))
-    return indexed[0][1]
+    # Skip experiments that have crashed >= 3 times in a row (without success)
+    # to avoid a hot crash loop. They can be re-enabled by editing the queue.
+    eligible = [iv for iv in indexed if crash_counts.get(iv[1]["name"], 0) < 3 or success_counts.get(iv[1]["name"], 0) > 0]
+    if not eligible:
+        # Everyone is broken — fall back to least-attempted
+        eligible = indexed
+    # Sort by (total_attempts, index)
+    eligible.sort(key=lambda iv: (
+        success_counts.get(iv[1]["name"], 0) + crash_counts.get(iv[1]["name"], 0),
+        iv[0],
+    ))
+    return eligible[0][1]
 
 
 def parse_log(log_text: str) -> dict:
