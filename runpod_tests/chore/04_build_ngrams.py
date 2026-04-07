@@ -20,7 +20,7 @@ import numpy as np
 from pathlib import Path
 
 VOCAB = 1024
-HASH_BUCKETS = 2048
+HASH_BUCKETS = int(os.environ.get("HASH_BUCKETS", 16384))
 DATA_DIR = Path("data/datasets/fineweb10B_sp1024")
 MAX_TOKENS = int(os.environ.get("MAX_TOKENS", 100_000_000))  # 100M default; 0 = all
 

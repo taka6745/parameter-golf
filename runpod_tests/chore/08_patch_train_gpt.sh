@@ -294,7 +294,7 @@ else:
         self._ngram_w_bigram = float(os.environ.get("NGRAM_W_BIGRAM", "0.20"))
         self._ngram_w_trigram = float(os.environ.get("NGRAM_W_TRIGRAM", "0.15"))
         self._ngram_w_fourgram = float(os.environ.get("NGRAM_W_FOURGRAM", "0.10"))
-        self._ngram_hash = 2048  # must match 04_build_ngrams.py HASH_BUCKETS
+        self._ngram_hash = int(os.environ.get("NGRAM_HASH_BUCKETS", "16384"))  # must match 04_build_ngrams.py HASH_BUCKETS
         self.register_buffer("_bigram_tab", torch.zeros(1, dtype=torch.float32), persistent=False)
         self.register_buffer("_trigram_tab", torch.zeros(1, dtype=torch.float32), persistent=False)
         self.register_buffer("_fourgram_tab", torch.zeros(1, dtype=torch.float32), persistent=False)
