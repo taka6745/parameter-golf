@@ -462,6 +462,38 @@ else:
         content = content.replace(old_block_forward, new_block_forward)
         print("  ✓ added SMEAR_GATE pre-MLP smear")
 
+# Patch 13: USE_PARALLEL_RESIDUALS=1 → compute attn and mlp in parallel from the same input.
+# Found in research cron #1 (Apr 7 21:23 local) by mining recent openai/parameter-golf PRs:
+#   PR #1437: Record SP8192 + Parallel Residuals + 3-Layer Recurrence — val_bpb 1.07800
+#   PR #1420: Triple Loop + Parallel Residuals + N-gram Tilt — val_bpb 1.08014
+#   PR #1425: PROTEUS Feature Ablation - Parallel Residuals + Mixed INT5/INT6
+# All three top records use parallel residuals; we never tried it.
+#
+# Anchors on the FIRST 3 lines of Block.forward (def + mix + resid blend) which are
+# invariant under Patch 11 (smear gate). Inserts the parallel branch right after, so
+# the existing serial path (with smear gate) is preserved as the fallback below.
+# Idempotent via PARALLEL_RESIDUALS_MARKER.
+if "PARALLEL_RESIDUALS_MARKER" in content:
+    print("  ✓ parallel residuals already applied")
+else:
+    old_first_3 = """    def forward(self, x: Tensor, x0: Tensor) -> Tensor:
+        mix = self.resid_mix.to(dtype=x.dtype)
+        x = mix[0][None, None, :] * x + mix[1][None, None, :] * x0"""
+    new_first_3 = """    def forward(self, x: Tensor, x0: Tensor) -> Tensor:
+        mix = self.resid_mix.to(dtype=x.dtype)
+        x = mix[0][None, None, :] * x + mix[1][None, None, :] * x0
+        # PARALLEL_RESIDUALS_MARKER: compute attn + mlp in parallel from the same pre-norm input
+        if int(os.environ.get("USE_PARALLEL_RESIDUALS", "0")):
+            attn_in = self.attn_norm(x)
+            mlp_in = self.mlp_norm(x)
+            attn_out = self.attn(attn_in)
+            mlp_out = self.mlp(mlp_in)
+            x = x + self.attn_scale.to(dtype=x.dtype)[None, None, :] * attn_out + self.mlp_scale.to(dtype=x.dtype)[None, None, :] * mlp_out
+            return x"""
+    if old_first_3 in content:
+        content = content.replace(old_first_3, new_first_3)
+        print("  ✓ added PARALLEL_RESIDUALS branch")
+
 # Patch 9: USE_LEAKY_RELU=1 → MLP activation is leaky_relu(0.5)^2 instead of relu^2.
 # Mac validated -0.014 BPB at 500 steps (LESSONS.md §2). One-line MLP change.
 # Idempotent via LEAKY_RELU_MARKER.
