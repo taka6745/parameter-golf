@@ -228,6 +228,45 @@ else:
     else:
         print("  ! couldn't find unclamped phase transition block — clamp not applied")
 
+# Patch 7: SKIP_FINAL_EVAL also disables the last-step val pass + bails before GPTQ quant
+# Without this, even with SKIP_FINAL_EVAL=1 the training loop's `should_validate = last_step or ...`
+# triggers a full val eval (62M tokens, ~20 min on a 3080 Ti) when wallclock fires.
+# We also bail out earlier — right after `peak memory allocated` — so we skip the post-loop
+# int8 quant + zlib compress + checkpoint save when in signal mode.
+if "SKIP_LAST_VAL_MARKER" in content:
+    print("  ✓ skip-last-val already applied")
+else:
+    old_should_validate = """        should_validate = last_step or (args.val_loss_every > 0 and step % args.val_loss_every == 0)
+        if should_validate:"""
+    new_should_validate = """        # SKIP_LAST_VAL_MARKER: with SKIP_FINAL_EVAL=1 the last-step val pass is skipped
+        _skip_last_val = os.environ.get("SKIP_FINAL_EVAL", "0") == "1"
+        should_validate = (last_step and not _skip_last_val) or (args.val_loss_every > 0 and step % args.val_loss_every == 0)
+        if should_validate:"""
+    if old_should_validate in content:
+        content = content.replace(old_should_validate, new_should_validate)
+        print("  ✓ added skip-last-val patch")
+
+if "SKIP_POST_LOOP_MARKER" in content:
+    print("  ✓ skip-post-loop already applied")
+else:
+    old_post_loop = """    log0(
+        f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
+        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB"
+    )"""
+    new_post_loop = """    log0(
+        f"peak memory allocated: {torch.cuda.max_memory_allocated() // 1024 // 1024} MiB "
+        f"reserved: {torch.cuda.max_memory_reserved() // 1024 // 1024} MiB"
+    )
+    # SKIP_POST_LOOP_MARKER: in signal mode, bail out before any quant/save/eval work
+    if os.environ.get("SKIP_FINAL_EVAL", "0") == "1":
+        log0("SKIP_FINAL_EVAL=1 — bailing before GPTQ quant + zlib + final eval")
+        if distributed:
+            dist.destroy_process_group()
+        sys.exit(0)"""
+    if old_post_loop in content:
+        content = content.replace(old_post_loop, new_post_loop)
+        print("  ✓ added skip-post-loop patch")
+
 # Patch 6: USE_NGRAM_BIAS=1 → load bigram/trigram/fourgram tables and add as logit bias
 # Tables are built by 04_build_ngrams.py:
 #   bigram_tab_1024v.npy   shape (HASH=2048, V=1024) — log P(next | prev)
