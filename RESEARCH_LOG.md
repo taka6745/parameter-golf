@@ -1028,3 +1028,83 @@ Created a new task to **monitor PR #1430 status** every 2 hours. If it gets a co
 - **Created watch task for PR #1430 status**
 
 NO code patches pushed this fire. The techniques are unverified and unmeasurable on our loop.
+
+---
+
+## Research Fire #12 — 2026-04-08 (cron min :16, Track A → data side) — Coprime-Stride Loader: SPEC FOUND but DEFERRED (upstream is stateless)
+
+**Subject**: Coprime-stride data loader from PR #1099 (latest merged record). Audit fire #1 explicitly recommended this as the next non-architectural direction. Should be a high-confidence port (26 PRs use it).
+
+### First subagent finding (technique definition + validation)
+
+Coprime-stride deterministic sampling: within each shard, pick a random integer `s` where `gcd(s, num_blocks) = 1`, then sample blocks via `block_idx = (start + i*s) % num_blocks` for i=0,1,2,... This guarantees max spacing diversity (covers all blocks before repeating, blocks evenly spaced rather than clumped).
+
+**Origin**: PR #726 by DeepReinforce (March 2026), competition-internal invention. Not in any arxiv paper.
+
+**26 PRs use it**, top scores: PR #1060 = 1.1122 (3-seed mean), PR #1099 = 1.1133 (latest merged record), PR #1135 = 1.1116. Strongest port-with-evidence ratio of any technique we've investigated.
+
+**Estimated effect**: -0.01 to -0.02 BPB at 22M scale (subagent inference from PR scores).
+
+### Second subagent finding (CRITICAL — upstream is stateless)
+
+Spawned a focused subagent to extract the EXACT upstream `DistributedTokenLoader` class code. Result:
+
+```python
+class DistributedTokenLoader:
+    def __init__(self, pattern: str, rank: int, world_size: int, device: torch.device):
+        self.rank = rank
+        self.world_size = world_size
+        self.device = device
+        self.stream = TokenStream(pattern)  # ← all state is in TokenStream
+
+    def next_batch(self, global_tokens: int, seq_len: int, grad_accum_steps: int):
+        local_tokens = global_tokens // (self.world_size * grad_accum_steps)
+        per_rank_span = local_tokens + 1
+        chunk = self.stream.take(per_rank_span * self.world_size)
+        start = self.rank * per_rank_span
+        local = chunk[start : start + per_rank_span].to(dtype=torch.int64)
+        x = local[:-1].reshape(-1, seq_len)
+        y = local[1:].reshape(-1, seq_len)
+        return x.to(self.device, non_blocking=True), y.to(self.device, non_blocking=True)
+```
+
+**The upstream loader is COMPLETELY STATELESS**. No `_cursor_stride[]`, no `_cursor_phase[]`, no per-shard tracking. It just slices from `TokenStream` on each call. Total: ~10 lines.
+
+### Why this changes the implementation calculus
+
+PR #1099/#1060's coprime-stride loader is NOT a small patch — it's a **fundamental rewrite** of the loader class to add stateful per-shard cursor management. The first subagent's "10 LOC" estimate was based on the patched-FROM-PR-1060 version, not the upstream baseline.
+
+A correct implementation would require:
+1. New state arrays in `__init__`: `_cursor_block[]`, `_cursor_stride[]`, `_cursor_phase[]` (per-shard, length = num_shards)
+2. New helper `_pick_coprime_stride(n)` (~5 LOC)
+3. Either modify `TokenStream.take()` to accept stride parameters OR write a new `_take_from_shard()` method that bypasses TokenStream
+4. Replace the simple `chunk = self.stream.take(...)` with a multi-shard stride-aware sampling system
+
+**Estimated real LOC**: 60-100, not 10. Plus reading and understanding the `TokenStream` class to know if it can accept stride parameters or needs to be subclassed.
+
+### Why I'm DEFERRING despite the spec being clear
+
+1. **Anchor risk on critical path**: data loader is the entry point for ALL training. A buggy patch could either silently produce wrong data (model trains on garbage, crashes after hours of "looks fine" runs) OR break the runner entirely.
+2. **Need to understand TokenStream first**: the patch interacts with another class I haven't read. Adding TokenStream extraction would require a third subagent call.
+3. **Contained-rewrite vs anchor-replace**: this isn't a small idempotent string-replacement patch like Patches 17/18. It's a class rewrite. The patcher script would need a different mechanism (probably overwrite the entire class definition).
+4. **Risk/return at this point in the night**: we've already shipped 2 optimizer patches that turned out marginal. Another optimistic ship could chew up loop cycles validating something that turns out to also be marginal at our scale. Better to validate the existing MS3/EL/MR cycle 2+3 results first.
+
+### Spec captured for next research fire
+
+When we have time to do this carefully, the implementation plan is:
+
+1. Spawn a third subagent to extract the exact upstream `class TokenStream` code
+2. Decide whether to (a) modify TokenStream to accept stride params, or (b) write a new `CoprimeTokenStream` class
+3. Write Patch 19 USE_COPRIME_STRIDE that REPLACES the entire `DistributedTokenLoader.next_batch()` method (anchored on the unique class signature)
+4. Add stride state arrays in `__init__` via a separate anchor
+5. Add 4 experiments: CS0_alone, CS1_plus_leaky_ng, CS2_seed42, CS3_full_stack
+
+Estimated implementation time: 30-45 minutes for a careful research fire. Estimated benefit: -0.01 to -0.02 BPB at H100, potentially measurable on cheap GPU as -0.005 to -0.015 train_loss.
+
+### What this fire produced
+
+- **Coprime-stride spec captured** with exact upstream baseline code for reference
+- **Reality check**: not all "high-confidence port" recommendations are easy ports. Implementation difficulty depends on how different the upstream baseline is from the patched version.
+- **Verdict**: defer until next focused research fire
+
+NO code patches pushed. Loop continues uninterrupted with the existing MS+MR cycle 2+3 validation.
