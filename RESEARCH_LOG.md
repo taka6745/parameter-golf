@@ -444,3 +444,80 @@ Nothing pushed. Audit verdict still stands: pivot to non-architectural wins. Nex
 1. **N-gram Tilt** (PR #1437/#461 framework) — multiplicative reweighting of decode probabilities by an n-gram cache built from the prefix that's already been seen. This is causal and ADDS information rather than just sharpening. Worth a focused subagent dive next fire.
 2. **BPE-8192 ngram tables** — task #49 still pending. Would let us A/B test SP1024 vs BPE8192 with the same n-gram-bias stack, which is the single biggest tokenizer-side gap vs the top open PRs.
 3. **Coprime-Stride data loader** (PR #1099 merged record) — data ordering trick, could be ported in <50 LOC and is grounded in a merged record, not speculative.
+
+---
+
+## Research Fire #6 — 2026-04-08 (cron min :16, Track B = comp PRs) — Legal N-gram Tilt FORMULA CAPTURED, code patch DEFERRED
+
+**Subject**: Deep-dive PR #1437 + PR #1420 + issue #1017 to extract the canonical "Legal N-gram Tilt" formulation. Subagent got the actual math from PR #1420 (the source — PR #1437 just stacks it).
+
+### Canonical Formula (from PR #1420 line 233)
+
+For each eval position with target token x_t:
+
+```
+hint        = ngram_cache.lookup(prefix[:t])    # may be None
+has_hint    = (hint is not None)
+is_hit      = has_hint and (x_t == hint)
+
+p_hint      = p_model(hint)            # if has_hint, else 0
+Z           = 1 + p_hint * (exp(β) - 1)
+nll_tilt    = nll_model + has_hint * (log(Z) - β * is_hit)
+```
+
+Equivalently:
+```
+p_tilt(x_t) = p_model(x_t) * exp(β * 1[x_t == hint]) / Z
+```
+
+**β ∈ [1.0, 2.0]** (default 1.5) tilt strength
+**k ∈ [8, 16]** token-level n-gram order
+**+ within-word orders 1-3** (byte-level)
+**+ word-start bigrams**
+
+### Why it's LEGAL under issue #1017 (four conditions)
+
+1. **Strict causal**: hint computed from `tokens[< t]` only. Target token never read for hint lookup.
+2. **Full normalized**: tilt reweights full vocab via exp+renormalize, gives proper distribution.
+3. **Score-before-update**: scoring at position t uses cache state from tokens[< t]; cache then updated with x_t AFTER scoring is locked.
+4. **Single left-to-right pass**: no re-scoring, no future leakage.
+
+### Why this is GENUINELY different from EM-INF (last fire's PASS)
+
+EM-INF was equivalent to temperature sharpening — pure information-free entropy reduction that strictly hurts in-distribution NLL. N-gram tilt **uses an external signal** (the prefix-only n-gram hint) to *selectively boost one specific token*. If the hint is reliable, it provides REAL information from the autoregressive eval state that the model didn't capture at train time. Multiplicative reweighting + renormalization is mathematically legitimate.
+
+### Why I'm DEFERRING the code patch despite the formula being clear
+
+1. **Wrong metric for our loop**: Our experiment_runner measures `train_loss` (because `SKIP_FINAL_EVAL=1` saves the 5-min eval pass per run, allowing us to do 8x more experiments per hour). Tilt is **eval-only**. Shipping this patch wouldn't affect ANY of our loop's train_loss measurements, so we couldn't validate it in the loop. Validation requires `SKIP_FINAL_EVAL=0` which we only do for H100 escalation.
+
+2. **Subagent pseudocode has critical bugs**:
+   - The "50 LOC sketch" loops `pos` calling `model(prefix[:, :pos+1])` per position → O(L²) forward passes per batch. Untenable for 1024-token blocks. A correct streaming implementation needs to extract per-position logits from the existing single forward pass.
+   - `targets.mode()[0]` collapses across batch dimension when updating the cache — not per-sample. Correct version needs per-batch streaming dict updates.
+   - Cache key as `tuple(...tobytes())` is slow Python; would want a numpy or torch-native hash.
+   - Correct implementation is closer to **150-200 LOC**, NOT the 50 the subagent quoted. That's medium-hard, not easy/medium.
+
+3. **Risk to existing SKIP_FINAL_EVAL=0 pipeline**: modifying the eval/loss path is risky — could break the FINAL int8_zlib_roundtrip val_bpb computation if I get it slightly wrong. We wouldn't notice until H100 escalation time, where each iteration costs $3-5.
+
+### What I AM doing this fire
+
+- **Capturing the formula** in this log so the next H100-escalation fire can implement it from a clean spec instead of re-deriving.
+- **Marking as HIGH PRIORITY** for the H100-escalation step. When we have a CHAMPION config ready to escalate, the plan is:
+  1. Implement N-gram Tilt as Patch 23 (eval-only, ~150 LOC, gated by `USE_NGRAM_TILT_EVAL=1`)
+  2. Test on cheap GPU first with `SKIP_FINAL_EVAL=0` on a SHORT run (200 steps) to confirm it doesn't break the eval pipeline
+  3. Then run on H100 with the champion config
+  4. Compare `final_int8_zlib_roundtrip val_bpb` with and without tilt
+
+### Estimated value
+
+- PR #1420 reports **+0.003 BPB delta** (single technique contribution at SP8192)
+- Discounted for our SP-1024 (smaller vocab, sparser cache, lower hit rate): **+0.0015 to +0.0030 BPB**
+- This is on the same order as the largest single-technique gains in any record. WORTH the H100 escalation time.
+
+### Comp novelty
+
+- Used in PR #1437 (1.078), PR #1420 (1.083), and PR #1430 (claimed 0.396 — almost certainly illegal variant). The CANONICAL formulation in PR #1420 is the legal one we want.
+- We don't yet have it. Adding it would close one of our biggest known gaps vs the legal frontier.
+
+### Action: NO PUSH this fire. Formula captured for next escalation cycle.
+
+The subagent's verdict was SHIP; I overrode to DEFER for the metric/complexity reasons above. This is consistent with the audit fire #1 verdict "pivot to non-architectural wins" — n-gram tilt IS the right direction, but the right time to implement it is when we have a champion to measure against, not in a research fire that can't validate it.
