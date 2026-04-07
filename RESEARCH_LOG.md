@@ -867,3 +867,69 @@ Total optimizer-side experiments now in queue:
 - 8 experiments × 5 min = 40 min until full validation data
 
 This is the **first time in the autonomous loop that we have two genuinely novel optimizer patches running back-to-back validation**. If either lands within champion noise (3.27-3.30), we have a defensible H100 escalation candidate. If both fail, we've efficiently falsified two paths in <1 hour.
+
+---
+
+## Audit Fire #4 — 2026-04-08 ~16:39 UTC — fourth consecutive novelty confirmation + CRITICAL PR #1430 update
+
+### Pod status
+Loop alive (PID 123956 + new train_gpt running MR3 stacked test). NEW result from MR family: **MR2_muoneqr_seed42 = 3.3004** — meaningfully BETTER than MS2_mousse_seed42=3.3358 (Δ -0.035). Suggests MuonEq-R is slightly better than Mousse at the L5 stack. Not a new top-1 (still 3.2734) but inside the noise band.
+
+### Novelty re-verification (subagent — fourth consecutive confirmation)
+
+**Patches 15/16/21 STILL NOVEL** across 120+ open + 10 closed PRs (4 audits in a row):
+- ✓ Patch 15 USE_TABULATION_HASH
+- ✓ Patch 16 USE_GATED_ATTENTION
+- ✓ Patch 21 USE_MTP
+
+**Patches 17/18 are ports, not novel** (already known and documented):
+- Patch 17 USE_MOUSSE — explicitly ported from PR #1440 in research fire #9 commit
+- Patch 18 USE_MUONEQ_R — explicitly ported from PR #1260/#1429/40+ PRs in research fire #10 commit
+
+Subagent flagged these as "URGENT contested", but they were never claimed novel-to-comp. They were always known ports of published techniques (arxiv:2603.09697 + arxiv:2603.28254). The novelty for our stack comes from the empirical question of whether they help at our 22M scale, which our MS/MR experiments are answering.
+
+### CRITICAL: PR #1430 newly MERGED at 0.39642 BPB
+
+**This is the most important finding from this audit fire.**
+
+The audit subagent reports PR #1430 (renqianluo) has been **MERGED** since the last audit:
+- **Title**: "Record: Per-Sample SLOT + N-gram Order-22 + TTT + LR=0.432"
+- **Score**: 0.39642 BPB (3-seed mean, seeds 1337/42/314)
+- **Status**: MERGED, claimed fully legal under issue #677 (600s train + 593.7s eval + 15.86 MB artifact)
+- **Technique stack**: Per-Sample SLOT (1536 params per sequence) + Causal Backoff N-gram Mixer (order-22, entropy-adaptive alpha) + GPTQ damp=0.005
+
+**0.39642 BPB is a 65% reduction below our publicly-known SOTA of ~1.11**. If this is real and legal, the competitive landscape has fundamentally changed.
+
+Audit fire #1 (and #2, #3) all flagged this PR as "suspicious — likely illegal under issue #677". Now that it's merged, either:
+1. It's actually legal (a real 65% breakthrough — extremely unlikely)
+2. The eval methodology has a subtle leak the comp owners haven't caught yet
+3. The "merged" status is wrong and the subagent misread
+
+**Action for next research fire**: spawn a focused subagent to deep-dive PR #1430 specifically. Read the FULL body, get the implementation, verify the eval pipeline, look for the gold-token leak path. If it's real, port it. If it's leak-based, document for the comp owners.
+
+### New PRs since last audit
+| PR# | Title | Author | Score |
+|---|---|---|---|
+| 1444 | LeakyReLU GPTQ-lite v1 | hypnoastic | non-record |
+| 1443 | ByteJEPA | hardik-bhadani-git | 1.3496 |
+| 1441 | nogakeren System Optimizations (in-dev) | nogakeren | dev |
+| 1440 | EngramLite + Mousse + ProgDepth (known) | Mertyandimata | 1.1026 |
+| 1439 | LoRA exploration archive | reyhandl | non-record |
+
+No NEW critical entries; the threat is the merged PR #1430.
+
+### Spend check
+Pod uptime ~3.7h × $0.30/h ≈ **$2.30 / $36 budget (6% utilization)**. Well under thresholds.
+
+### Audit verdict #4
+
+**3/5 patches still genuinely novel-to-comp** (15, 16, 21). All 3 marginal at our scale.
+
+**The Mousse/MuonEq-R falsification is proceeding rapidly** — MS family complete (negative verdict), MR family in flight (mixed: MR0 negative, MR2 promising). Both patches are confirmed safe (zero crashes) and easily measurable on the loop.
+
+**Most urgent action**: investigate the merged PR #1430 (Per-Sample SLOT) at 0.39642 BPB next research fire. If real, this is the new SOTA and dwarfs everything else we're doing. If illegal, document it and report to comp owners.
+
+**Other open PR techniques worth tracking** (not in our stack):
+- **Per-Sample SLOT** (PR #1430, MERGED 0.39642) — top priority for next fire
+- **EngramLite multi-head gated** (PR #1440, 1.1026) — already partially ported (Patch 22)
+- **Int4 GPTQ packing** (PR #1429/#1426) — extends our deferred Patch 23 INT6 GPTQ direction
