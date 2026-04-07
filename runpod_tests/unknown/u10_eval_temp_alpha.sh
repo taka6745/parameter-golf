@@ -43,7 +43,7 @@ GPU_NAME=$(python3 -c "import torch; print(torch.cuda.get_device_name(0))" 2>/de
 echo "GPU: $GPU_NAME"
 
 if [[ "$GPU_NAME" == *"3060"* ]] || [[ "$GPU_NAME" == *"3080"* ]] || [[ "$GPU_NAME" == *"4070"* ]]; then
-    BATCH=8192
+    BATCH=1024
     GA=8
     WALL=120
 elif [[ "$GPU_NAME" == *"H100"* ]] || [[ "$GPU_NAME" == *"A100"* ]]; then
@@ -51,7 +51,7 @@ elif [[ "$GPU_NAME" == *"H100"* ]] || [[ "$GPU_NAME" == *"A100"* ]]; then
     GA=1
     WALL=600
 else
-    BATCH=65536
+    BATCH=4096
     GA=1
     WALL=300
 fi

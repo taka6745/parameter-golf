@@ -7,7 +7,7 @@
 #
 # Speed tricks (from GPU_RESULTS.md findings):
 #   1. TRAIN_SEQ_LEN=128 — 6.1x faster than 1024 (per gpu_speed_test.py)
-#   2. TRAIN_BATCH_TOKENS=65536 — sane batch, kills microbatch overhead
+#   2. TRAIN_BATCH_TOKENS=1024 — sane batch, kills microbatch overhead
 #   3. VAL_BATCH_SIZE=131072 — fast val pass
 #   4. VAL_LOSS_EVERY=0 SKIP_FINAL_EVAL=1 — no mid-training val
 #   5. We don't care about quality here, just "does it run"
@@ -22,7 +22,7 @@ ITERATIONS=50 \
 VAL_LOSS_EVERY=0 SKIP_FINAL_EVAL=1 \
 TRAIN_LOG_EVERY=10 \
 TRAIN_SEQ_LEN=128 \
-TRAIN_BATCH_TOKENS=65536 \
+TRAIN_BATCH_TOKENS=1024 \
 GRAD_ACCUM_STEPS=1 \
 VAL_BATCH_SIZE=131072 \
 WARMUP_STEPS=10 \

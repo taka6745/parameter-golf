@@ -42,7 +42,7 @@ echo "GPU: $GPU_NAME"
 echo
 
 if [[ "$GPU_NAME" == *"3060"* ]] || [[ "$GPU_NAME" == *"3080"* ]] || [[ "$GPU_NAME" == *"4070"* ]]; then
-    BATCH=8192
+    BATCH=1024
     GA=8
     STAGE1_WALL=120  # 2 min
     STAGE2_WALL=30   # 30 sec
@@ -56,7 +56,7 @@ elif [[ "$GPU_NAME" == *"H100"* ]] || [[ "$GPU_NAME" == *"A100"* ]]; then
     TOTAL_WALL=600   # 10 min
     echo "Real GPU detected — running full 10 min test"
 else
-    BATCH=65536
+    BATCH=4096
     GA=1
     STAGE1_WALL=240
     STAGE2_WALL=60

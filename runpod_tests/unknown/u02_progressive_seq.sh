@@ -37,7 +37,7 @@ echo
 if [[ "$GPU_NAME" == *"3060"* ]] || [[ "$GPU_NAME" == *"3080"* ]] || [[ "$GPU_NAME" == *"4070"* ]]; then
     # Cheap GPU: just verify it doesn't crash
     WALL=120
-    BATCH=8192
+    BATCH=1024
     GA=8
     echo "Cheap GPU detected — running 2 min smoke test only"
 elif [[ "$GPU_NAME" == *"H100"* ]] || [[ "$GPU_NAME" == *"A100"* ]]; then
@@ -48,7 +48,7 @@ elif [[ "$GPU_NAME" == *"H100"* ]] || [[ "$GPU_NAME" == *"A100"* ]]; then
     echo "Real GPU detected — running full 10 min test"
 else
     WALL=300
-    BATCH=65536
+    BATCH=4096
     GA=1
     echo "Unknown GPU, running medium test"
 fi

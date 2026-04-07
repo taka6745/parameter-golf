@@ -20,7 +20,7 @@ if ! grep -q 'PROGRESSIVE_SEQ' train_gpt.py 2>/dev/null; then
     exit 1
 fi
 
-echo "Running 30s with progressive seq (25.5s @ seq=128, 4.5s @ seq=1024)..."
+echo "Running 10s with progressive seq (8.5s @ seq=128, 1.5s @ seq=1024)..."
 
 PROGRESSIVE_SEQ=1 \
 PHASE1_SEQ_LEN=128 \
@@ -31,10 +31,10 @@ PHASE1_NGRAM_WEIGHT=0.40 \
 PHASE2_NGRAM_WEIGHT=0.05 \
 \
 ITERATIONS=10000 \
-MAX_WALLCLOCK_SECONDS=30 \
+MAX_WALLCLOCK_SECONDS=10 \
 TRAIN_LOG_EVERY=50 \
 TRAIN_SEQ_LEN=128 \
-TRAIN_BATCH_TOKENS=65536 \
+TRAIN_BATCH_TOKENS=1024 \
 GRAD_ACCUM_STEPS=1 \
 VAL_BATCH_SIZE=131072 \
 VAL_LOSS_EVERY=0 SKIP_FINAL_EVAL=1 \
