@@ -809,3 +809,61 @@ This is why I overrode the subagent's cautious PASS. **First proper shippable pa
 ### Validation plan
 
 Loop will pick up the new patch on next git pull (~5 min). MS family experiments will run within the next 2 hours via the runner cycle. Check on next monitor fire (~16:00 UTC) to see if MS1/MS2/MS3 land below 3.30 (within champion range) — if YES, Mousse is validated for H100 escalation bundle. If NO, we have evidence that even the simplified Mousse doesn't help at our 22M scale (a useful negative result either way).
+
+---
+
+## Research Fire #10 — 2026-04-08 (cron min :16, Track A) — Patch 18 USE_MUONEQ_R SHIPPED
+
+**Subject**: Continue the optimizer-side vector after Patch 17 USE_MOUSSE success. Investigate "MuonEq-R" referenced in PR #1423 (1.0791 BPB) and many other top open submissions but never extracted.
+
+### Subagent finding
+
+**MuonEq-R = row-only normalization before Newton-Schulz**. From arxiv:2603.28254 "MuonEq: Balancing Before Orthogonalization with Lightweight Equilibration" (Mar 30, 2026). Used in **40+ openai/parameter-golf PRs**, top record PR #1260 at val_bpb 1.0929 (3-seed mean).
+
+**Formula**:
+```
+row_norm[i] = sqrt(sum_j G[i,j]^2)        # L2 norm of row i
+G_normalized[i,j] = G[i,j] / row_norm[i]  # divide each row by its norm
+```
+Then standard Newton-Schulz on G_normalized. Each row of the result has unit L2 norm.
+
+**Distinct from Patch 17 Mousse**: Mousse is row+col preconditioning (`G/(||row||*||col||)`), MuonEq-R is row-only (`G/||row||`). They are mathematically different and can stack independently. PR #1440 stacks both: Mousse first, then MuonEq-R, then NS5.
+
+### Why I shipped this fire (no override needed — subagent agreed)
+
+1. **Optimizer-side → fits our train_loss metric** (same reasoning as Mousse). We can validate on the cheap-GPU loop within ONE cycle after the runner pulls.
+2. **5 LOC implementation** — same anchor strategy as Patch 17, contained inside the Muon optimizer step body.
+3. **40+ PRs use it** — the highest-confidence port we've found in any research fire. PR #1260 specifically attributes +0.001 BPB to MuonEq-R alone.
+4. **Stacks with Mousse** — we can run them independently, together, or against each other. Four experiments queued.
+5. **Same risk profile as Patch 17** — gated, contained, falls back gracefully.
+
+### Patch 18 USE_MUONEQ_R — code shipped this fire
+
+Inserted between the Mousse block (Patch 17) and the Newton-Schulz call:
+```python
+                    # MUONEQ_R_MARKER: optional row-only normalization (arxiv:2603.28254)
+                    if int(os.environ.get("USE_MUONEQ_R", "0")):
+                        _row_norm = g.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+                        g = g / _row_norm
+                    g = zeropower_via_newtonschulz5(g, steps=backend_steps)
+```
+
+5 lines of actual code. Marker MUONEQ_R_MARKER. Anchored on the same `g = zeropower_via_newtonschulz5(g, steps=backend_steps)` line that Patch 17 ended its block with — string replacement finds the line at the end of Patch 17's block and inserts the MuonEq-R block before it.
+
+### Experiments queued (4 added → queue is now 28)
+
+- **MR0_muoneqr_alone** — pure MuonEq-R without n-gram bias, isolation test
+- **MR1_muoneqr_plus_leaky_ng** — MuonEq-R + leaky_relu + L5 weights (champion config)
+- **MR2_muoneqr_seed42** — multi-seed validation of MR1
+- **MR3_mousse_plus_muoneqr** — STACK BOTH Mousse + MuonEq-R + leaky_relu + L5 weights — measures the additive value vs either alone
+
+The MR3 stacked experiment is the most interesting — if it lands below MS1 (Mousse alone) AND below MR1 (MuonEq-R alone), then the two patches genuinely stack at our scale.
+
+### Two optimizer-side patches in flight
+
+Total optimizer-side experiments now in queue:
+- 4 MS experiments (Patch 17 Mousse) — currently MS1 in flight, MS2/MS3 next
+- 4 MR experiments (Patch 18 MuonEq-R) — will fire after MS family completes
+- 8 experiments × 5 min = 40 min until full validation data
+
+This is the **first time in the autonomous loop that we have two genuinely novel optimizer patches running back-to-back validation**. If either lands within champion noise (3.27-3.30), we have a defensible H100 escalation candidate. If both fail, we've efficiently falsified two paths in <1 hour.

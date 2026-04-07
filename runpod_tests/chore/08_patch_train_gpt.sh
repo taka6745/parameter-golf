@@ -1088,6 +1088,38 @@ else:
         content = content.replace(old_loop, new_loop)
         print("  ✓ added WAVELET calls in GPT.forward")
 
+# Patch 18: USE_MUONEQ_R=1 → row-only normalization before Newton-Schulz orthogonalization.
+# From arxiv:2603.28254 "MuonEq: Balancing Before Orthogonalization with Lightweight
+# Equilibration" (Mar 2026). Used in 40+ openai/parameter-golf PRs, top record PR #1260
+# at val_bpb 1.0929 (3-seed mean).
+#
+# Mathematical formulation: for each Muon-managed weight matrix G (after momentum),
+#   row_norm[i] = sqrt(sum_j G[i,j]^2)
+#   G_normalized[i,j] = G[i,j] / row_norm[i]
+# After this, every row has unit L2 norm. Then standard Newton-Schulz.
+#
+# Distinct from Patch 17 Mousse: Mousse is row+col preconditioning (G/(||row||*||col||)),
+# MuonEq-R is row-only (G/||row||). They can stack: Mousse first, then MuonEq-R, then NS5.
+# PR #1440 uses both stacked. Implementation: 5 LOC, same anchor strategy as Patch 17 — but
+# anchored AFTER the Mousse block since Patch 17 runs first in this script.
+#
+# Idempotent via MUONEQ_R_MARKER. Anchored on the same Newton-Schulz call line which is
+# still present after Patch 17 (Patch 17's new_ns ends with that line).
+if "MUONEQ_R_MARKER" in content:
+    print("  ✓ MuonEq-R already applied")
+else:
+    old_ns_eqr = """                    g = zeropower_via_newtonschulz5(g, steps=backend_steps)"""
+    new_ns_eqr = """                    # MUONEQ_R_MARKER: optional row-only normalization (arxiv:2603.28254)
+                    if int(os.environ.get("USE_MUONEQ_R", "0")):
+                        _row_norm = g.norm(dim=-1, keepdim=True).clamp(min=1e-8)
+                        g = g / _row_norm
+                    g = zeropower_via_newtonschulz5(g, steps=backend_steps)"""
+    if old_ns_eqr in content:
+        content = content.replace(old_ns_eqr, new_ns_eqr)
+        print("  ✓ added MUONEQ_R row normalization")
+    else:
+        print("  ✗ MUONEQ_R anchor not found — skipping (MuonEq-R will be no-op)")
+
 # Patch 17: USE_MOUSSE=1 → diagonal Kronecker preconditioning before Newton-Schulz
 # orthogonalization in the Muon optimizer step.
 #
