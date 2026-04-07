@@ -568,3 +568,57 @@ We have THREE genuinely novel-to-comp patches (15, 16, 21). They are **marginal 
 - Compression-side codebook VQ (PR #1433)
 
 Both are PhD-level, both are non-architectural, both fit the "pivot" recommendation. Logging for next research fire (cron min :08 or :38).
+
+---
+
+## Research Fire #7 — 2026-04-08 (cron min :46, Track B = comp PRs) — EMA spec captured + queue cleanup + EL multi-seed expansion
+
+**Track**: B (PRs). Subagent extracted canonical EMA(0.997) implementation pattern from 6 merged records (PR #287, #315, #414, #1019, #1099). Spec captured for next research fire to ship as Patch 17.
+
+### Canonical EMA spec (from 6 merged records, unified pattern)
+
+**Locations**:
+- **Init** (after optimizer creation): `ema_state = {n: t.detach().float().clone() for n,t in base_model.state_dict().items()}`
+- **Update** (after each `opt.step()`): `ema_state[n].mul_(0.997).add_(t.detach().float(), alpha=0.003)` for n,t in state_dict
+- **Swap** (post-training, before final eval): `base_model.load_state_dict({n: t.to(orig_dtype) for n,t in ema_state.items()}, strict=True)`
+
+**Decay**: 0.997 (canonical across all 6 records)
+**Memory cost**: 88MB (22M params × 4 bytes fp32 shadow) on 12GB GPU = no risk
+**Artifact cost**: 0 (EMA replaces training weights, no extra storage)
+
+**CRITICAL caveat for our metric**: EMA only affects the FINAL eval val_bpb, NOT mid-training train_loss. Same metric problem as N-gram Tilt — our `experiment_runner.py` measures train_loss with `SKIP_FINAL_EVAL=1`, so shipping EMA would NOT show any benefit in our loop. EMA only shines on H100 escalation runs with `SKIP_FINAL_EVAL=0`.
+
+### Why I DEFERRED the actual patch this fire
+
+Same triple-risk pattern as Tilt:
+1. **No loop validation possible** — train_loss won't change
+2. **Anchor risk** — without reading train_gpt.py training-loop structure (multiple optimizers, opt.step locations), I'd be guessing where to insert. A wrong anchor either silently no-ops OR worse, anchors on a duplicated location causing double-update bugs that we wouldn't catch until H100 time.
+3. **Training-loop modifications are higher-risk than other patches** — touching the optimizer step path could introduce subtle bugs that affect ALL runs, not just `USE_EMA=1`.
+
+Logging the spec for next research fire to actually implement after reading train_gpt.py carefully.
+
+### What this fire DID push: queue cleanup + EL multi-seed expansion
+
+Cleaned `runpod_tests/loop/experiments.json` from 37 → **20 experiments**:
+- **Removed (15 dead/falsified entries)**: EA0/1/2/3 (entropy adaptive, falsified cycle 1+2), BG0/BG3 (batch tweaks, no novelty), NG1/NG2/NG3 (gate variants, falsified), TH0/1/2 (tabulation hash, falsified at scale), MEGA_stack_all_novel (kitchen-sink stack, fights itself), MTP0_mtp_alone (without n-gram, expected weak), MTP2_mtp_strong_weight (within MTP1 noise band), MTP1_seed999_validation (seed-999 outlier confirmed structural), MTP3_two_heads (worse than 1-head), PR2_parallel_plus_full_stack + PR3_parallel_plus_leaky_seed42 (parallel residuals dead at our scale), EL0_engram_lite_alone (without static n-gram, weak)
+
+- **Added (4 new EL multi-seed validations)**: 
+  - EL3_engram_lite_seed1337 — same as EL1 but explicit seed 1337
+  - EL4_engram_lite_seed999 — extending the seed-999 outlier check into EL family
+  - EL5_engram_lite_seed7 — fresh seed not yet tested
+  - EL6_engram_lite_L5weights — EngramLite stacked with L5 weights (0.15/0.20/0.15) instead of L4 weights (0.25/0.25/0.20). NEW combination not yet measured.
+
+**Why expand EL**: Monitor #10 surfaced EL2 cycle-2 = 3.2742 (only +0.0008 above champion). The audit fire #1 "EngramLite preliminarily falsified" verdict is now SOFT-REVERSED — EngramLite is tied within noise. Worth a 5-seed validation to confirm the variance band and decide whether EL is a free addition to the final stack or a coin flip.
+
+### Resulting queue (20 experiments)
+
+| Family | Count | Purpose |
+|---|---|---|
+| CHAMP_L5 | 5 seeds | Champion validation (already strong) |
+| CHAMP_L4 | 3 seeds | Alternative weight ratio (already validated) |
+| PR | 2 (PR0/PR1) | Parallel residuals minimal — kept for alternative branching |
+| GA | 2 (GA0/GA1) | Gated attention minimal — kept since still novel-to-comp |
+| MTP | 2 (MTP1/MTP1_seed42) | MTP marginal validation |
+| EL | 6 (1/2/3/4/5/6) | **PRIORITY** — multi-seed expansion of the EL2 reversal |
+
+The runner will pick up the new file on next git pull (~5 min). Queue cycles will be ~2x faster now (20 vs 37 experiments per cycle ≈ 100 min instead of 185 min).
