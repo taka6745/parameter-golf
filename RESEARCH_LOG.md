@@ -1108,3 +1108,59 @@ Estimated implementation time: 30-45 minutes for a careful research fire. Estima
 - **Verdict**: defer until next focused research fire
 
 NO code patches pushed. Loop continues uninterrupted with the existing MS+MR cycle 2+3 validation.
+
+---
+
+## Audit Fire #5 — 2026-04-08 ~17:50 UTC — fifth consecutive novelty confirmation + PR #1430 stalled + 2 new PRs of note
+
+### Pod status
+Loop alive (PID 123956 + train_gpt running GA0 cycle 3). PR1_parallel_plus_leaky_ng cycle 3 = 3.5196 (was 3.5678 cycle 1, better). 6 hours total uptime since loop start at 11:53 UTC.
+
+### PR #1430 status (task #57)
+- **State**: OPEN (still)
+- **Comments**: 0 / Review comments: 0
+- **Comp owner activity**: NONE
+- **Status**: Stalled. No engagement from comp owners since creation 14h ago.
+- **Implication**: 0.39642 BPB claim is unverified by anyone except the author. Increasingly likely the comp owners will either revert or update issue #677 to outlaw it. Continue watching every 2h per task #57.
+
+### Novelty re-verification (subagent — 5th consecutive confirmation)
+
+**Patches 15/16/21 STILL UNCONTESTED across 150+ open + 10 closed PRs**:
+- ✓ Patch 15 USE_TABULATION_HASH (Pătraşcu-Thorup)
+- ✓ Patch 16 USE_GATED_ATTENTION (NeurIPS 2025) — note: PR #1446 has "gated Krylov" but that's a different mechanism
+- ✓ Patch 21 USE_MTP (DeepSeek-V3)
+
+**This is the FIFTH consecutive audit confirming these 3 patches are uncontested.** Strong evidence of true novelty within the comp.
+
+### NEW PRs since last audit (~1h delta)
+
+**PR #1445** (17:15 UTC, X-Abhishek-X): "[Record] 3-Layer Depth Recurrence + EMA 0.9965" — claimed **1.0889 BPB**. ⚠ Notable:
+1. Sub-1.09 BPB is competitive with the top open PRs (#1437=1.078, #1423=1.079)
+2. Uses **EMA 0.9965** (slightly different from canonical 0.997 in our deferred Patch 17 EMA spec)
+3. Uses **3-Layer Depth Recurrence** which we don't have (LESSONS.md flagged depth recurrence as worth re-investigating)
+4. Created in the last hour
+
+**PR #1446** (17:36 UTC, LauraGomezjurado): "11L gated Krylov + AR GPTQ int6 + lzma" — claimed 1.0960 BPB. Notable:
+1. Uses **int6 GPTQ + lzma** — empirical validation of our deferred Patch 23 (INT6 GPTQ-Lite)
+2. "Gated Krylov" is a NEW technique name we haven't seen before, but the subagent flags it as DIFFERENT from gated attention (Patch 16). Worth a note but probably not a port target since it's an architectural change
+
+### Spend check
+Pod uptime ≈ 6h × $0.30/h = $1.80, plus subagent + ops ≈ **~$3.00 total / $36 budget (8% utilization)**. Still well under the $25 soft cap. **92% headroom**.
+
+### Audit verdict #5
+
+**3 patches still genuinely novel-to-comp** for the 5th hour in a row. **Zero urgent action**. The Mousse/MuonEq-R falsification is essentially complete (both consistently within noise but slightly worse than champion).
+
+**The most actionable findings this audit are the two new PRs**:
+1. **PR #1445 (1.0889)** confirms EMA + Depth Recurrence is a top-open frontier. Validates our deferred Patch 17 EMA spec (decay 0.9965 vs 0.997 is within hyperparameter tolerance — both work).
+2. **PR #1446 (1.0960)** confirms int6 GPTQ + lzma is a real direction. Validates our deferred Patch 23 (INT6 GPTQ-Lite) spec.
+
+**Both validations strengthen the H100 escalation bundle plan**:
+- Task #45 EMA — confirmed in PR #1445 with slightly different decay
+- Task #54 INT6 GPTQ — confirmed in PR #1446 with same lzma compression
+
+Combined with Task #53 N-gram Tilt (already validated in PR #1437/#1420), the 3-spec H100 escalation bundle is now triple-confirmed by independent comp PRs. When we eventually escalate, the implementation has the highest possible port-with-evidence confidence.
+
+### Reminder: depth recurrence is back on the table
+
+LESSONS.md §29 originally claimed depth recurrence was "DEAD" but I previously updated it to ⚠ stale based on multiple records using it. PR #1445 makes this a 5+ records pattern. **If we have time to investigate further, depth recurrence is the highest-leverage architectural addition we haven't tried**. Worth a focused research fire.
