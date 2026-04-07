@@ -317,3 +317,36 @@ EngramLite is a comp-PR import (PR #1440), not novel-to-world. But it generalize
 MTP from DeepSeek-V3 (Patch 21) is also a comp-import, not novel-to-world. Same logic — the combo with our n-gram-bias + leaky stack is the novel part.
 
 True "novel-to-world" candidates still in queue: signed-bigram-hash-LSH, Solve-English deterministic completions, n-gram-tilt-decoding (PR #461 framework). Pursuing those next.
+
+---
+
+## Research Fire #4 — 2026-04-07 (cron min :17, Track A = arxiv) — Differential Transformer DEFERRED
+
+**Topic**: Differential Transformer (Microsoft, Oct 2024, arxiv:2410.05258).
+Spawned an Explore subagent to deep-dive the paper + check comp PR novelty + assess for our scale.
+
+### Subagent verdict: DEFER
+
+**Mechanism**: `Attn = (softmax(Q1·K1ᵀ/√d) - λ·softmax(Q2·K2ᵀ/√d))·V`. Two parallel softmax attention maps subtracted → noise cancellation. Learnable λ vectors (~6×head_dim params/head, negligible overhead).
+
+**Comp novelty**: ZERO PRs in openai/parameter-golf reference "differential" or "DIFF attention". Genuinely novel-to-comp.
+
+**Why DEFERRED**:
+1. **Scale gap**: smallest tested model in paper is 830M (38× our 22M). No empirical validation at our scale. Benefit trajectory MIGHT extrapolate down but it's purely theoretical at 22M.
+2. **Crash risk**: Learnable λ uses `exp(λ_q1·λ_k1) - exp(λ_q2·λ_k2) + λ_init` which has known NaN failure modes (nanoGPT issue #567). Doesn't degrade gracefully — if λ blows up, BPB → ∞.
+3. **Implementation cost**: Custom attention forward (~80-120 LOC), can't use F.scaled_dot_product_attention, needs RoPE compat work for our partial-RoPE 16/64.
+4. **Violates user constraint**: "DOES NOT BREAK BPB (degrades gracefully if it fails)". DIFF doesn't degrade gracefully.
+
+**Verdict**: DEFER unless we get a successful 100M-param validation first. Not pushing this fire.
+
+### Alternative architectures to investigate next research fire (do NOT ship without validation)
+
+- **Gated Linear Attention (GLA, Yang et al. Dec 2024)**: sublinear complexity, designed for small models, minimal param overhead. Would replace softmax MHA entirely. Worth a separate deep-dive.
+- **FusionNet (heterogeneous multi-head attention, Nov 2024)**: mixes low-rank + sparse heads in single attention block. Tested at 70M-800M which is much closer to our 22M scale.
+- **YOCO (You Only Cache Once, Microsoft Apr 2024, arxiv:2405.05254)**: shared KV cache across layers. Could free params for the model body. Already noted as merge-record-relevant in our audit.
+
+### What I AM doing instead this fire
+
+Nothing — per user instruction "If you can't find anything novel in this fire, that's OK — just append 'no novel finding' to RESEARCH_LOG.md and let the loop continue. Don't push junk." Not falsifying our existing wins by patching speculatively.
+
+The loop is healthy — 32+ runs, EL family + MTP follow-ups still finishing, top-3 stable. Next research fire (cron min :38, Track B) will scan comp PRs for genuinely new techniques.
