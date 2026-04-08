@@ -15,7 +15,7 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 | L07_loss | 1 | L07_byte_weight | no | **n=2 PROMOTION-READY** | -0.48 mean (seed42=2.50, seed1337=2.229, mean=2.3645) |  | F | 20260408T0309Z |
 | L08_optimizer | 1 | L08_normuon | no | **n=2 PROMOTION-READY** | -0.47 mean (seed42=2.5208, seed1337=2.2285, mean=2.3747) |  | B | 20260408T0309Z |
 | L09_ngram | 1 | L09_entropy_adaptive | no | screened-pass | -0.32 (2.5201 @ step 1300) |  | C | 20260408T0257Z |
-| L06_norm | 1 | L06_ln_scale | no | **n=2 PROMOTION-READY** | -0.50 mean (seed42=2.4622, seed1337=2.2217, mean=2.34195) |  | E | 20260408T0328Z |
+| L06_norm | 1 | L06_ln_scale | no | **n=3 PROMOTION-READY** | -0.54 mean (seeds 42/1337/999 = 2.4622/2.2217/2.2204, mean=2.30143) |  | E | 20260408T0345Z |
 | L05_ffn | 1 | L05_parallel_residuals | no | screened-pass | -0.60 (2.2387 @ step 1400, n=1, awaiting seed1337) |  | G | 20260408T0334Z |
 
 <!-- rows added at runtime; status ∈ pending|in-flight|screened-pass|screened-fail|confirmed-win|confirmed-fail|demoted -->
