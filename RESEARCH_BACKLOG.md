@@ -48,6 +48,9 @@ Schema for every row:
 | 4 | EMB_poly_fourier_embed | C30 WebSearch — PETE arXiv:2505.02266 (May 2025) | replace learned tok_emb with Fourier polynomial expansion of token IDs ([cos(2πk/V), sin(2πk/V), ...]) + light MLP projection; saves ~0.5 MB → reallocate to n-gram tables | -0.008 BPB indirect | comp-novel | 45 | 20260408T0245Z |
 | 5 | EMB_tied_tensorized_tt | C30 WebSearch — arXiv:1901.10787 + arXiv:2401.12819 | TT-decompose tok_emb (1024×512) into ranks [1,16,16,1] and share factors with output projection (dynamic tying); saves ~1.2 MB | -0.006 BPB indirect | comp-novel | 80 | 20260408T0245Z |
 | 6 | EMB_byte_adaptive_projection_mixing | C30 novel synthesis — Bolmo (2025) entropy-driven inversion | learned sigmoid gate ϕ(byte_entropy_bucket) routes between (a) compact 512-d learned embedding for common bytes and (b) 256-d Fourier for rare bytes; allocates capacity by frequency | -0.007 BPB | **world-novel-candidate** | 70 | 20260408T0245Z |
+| 7 | EMB_dct_coefficient_energy_truncate | C30#3 signal-processing pollination — alphaXiv 2508.00220 | DCT-II on (1024, 512) tok_emb; truncate to top-K coefficients carrying 85% energy; reconstruct sparse → 30-40% size reduction with preserved logit geometry at int6 | -0.006 to -0.012 BPB indirect | **world-novel-candidate** | 70 | 20260408T0349Z |
+| 8 | EMB_wavelet_hard_threshold_dyadic | C30#3 SP — Daubechies-4 wavelet + WaveletGPT distinction | wavelet decomposition + hard thresholding on detail coefficients; multi-resolution: smooth dims compressed, sharp dims preserved. Distinct from WaveletGPT which targets activations | -0.004 to -0.010 BPB indirect | **world-novel-candidate** | 95 | 20260408T0349Z |
+| 9 | EMB_polyphase_token_phase_routing | C30#3 SP — Bellanger / Crochiere-Rabiner audio codec polyphase | split 1024 vocab into 4 cohorts (ID % 4 → phase); each phase uses (256, 512) sub-embedding; sum outputs → 62% storage reduction. Audio codec technique transplanted to vocabulary routing | -0.008 to -0.015 BPB indirect | **world-novel-candidate** | 85 | 20260408T0349Z |
 
 ---
 
@@ -128,6 +131,9 @@ Schema for every row:
 | 3 | CMP_per_row_hessian_rans_gptq | Plan-A novel | per-row Hessian-aware rANS coding on GPTQ int6 codes; rANS prior derived from per-row GPTQ Hessian | 0.5-1.0 MB savings → -0.004 BPB indirect | world-novel-candidate | 130 (rANS encoder + Hessian extraction) | 20260408T0000Z |
 | 4 | CMP_custom_cuda_int6_dequant_fusion | stretch S1 | custom CUDA kernel for int6 GPTQ dequant + matmul fusion; skips int8 buffer materialization | step time -10 to -25% | comp-novel | 300 (CUDA kernel + bindings) | 20260408T0000Z |
 | 5 | CMP_custom_brotli_dictionary | stretch S3 | train a custom Brotli pre-trained dictionary on a corpus of our checkpoints; saves 0.5-1.5 MB | -0.003 BPB indirect | comp-novel | 30 (dict training + serializer flag) | 20260408T0000Z |
+| 6 | CMP_mixed_precision_per_layer_alloc | C30#3 — ITERA-LLM arXiv:2505.08981 + Hessian sensitivity | use Hessian variance per-layer to allocate mixed precision: high-variance → int6, low-variance → int4; recompute per GPTQ calibration run | -0.006 to -0.010 BPB (1.2-2.0 MB freed) | **world-novel-candidate** | 95 | 20260408T0349Z |
+| 7 | CMP_trellis_coded_quantization_residual | C30#3 — Signal Processing IEEE 1989 + arXiv:2511.04684 (RAS accelerator) | apply trellis-coded quantization (Viterbi-decoded) to GPTQ int6 residuals → reduces per-layer quant noise by ~15-25% via lattice-path optimization | -0.004 to -0.008 BPB (0.8-1.6 MB savings) | **world-novel-candidate** | 120 | 20260408T0349Z |
+| 8 | CMP_hadamard_pre_rotation_quant | C30#3 — extension of EMB hadamard rotation to dense weights | pre-compose Walsh-Hadamard rotation into MLP/attention weight matrices BEFORE GPTQ; spreads quant noise uniformly across spectrum | -0.003 to -0.007 BPB | comp-novel | 70 | 20260408T0349Z |
 
 ---
 

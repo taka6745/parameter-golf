@@ -94,6 +94,46 @@ verdict_reason: combines Huffman coding (information theory) with SentencePiece 
 phd_defensible: yes — Huffman optimality theorem motivates the prior, clear ablation against uniform init, fits a 6-page workshop paper on information-theoretic tokenization
 owner: D
 
+### CMP_mixed_precision_per_layer_alloc
+added_utc: 20260408T0349Z
+source: C30#3 — ITERA-LLM arXiv:2505.08981 + Hessian sensitivity
+verdict: world-novel
+verdict_reason: ITERA-LLM allocates rank under fixed budget; allocating BIT-WIDTH per layer by Hessian variance is the dual problem and unpublished for byte-LM. PhD-defensible: clear theory (Hessian → quant sensitivity), clear ablation (uniform vs adaptive bit allocation), workshop-paper feasible.
+phd_defensible: yes
+owner: G/Mac
+
+### CMP_trellis_coded_quantization_residual
+added_utc: 20260408T0349Z
+source: C30#3 — Signal Processing IEEE 1989 + arXiv:2511.04684 RAS
+verdict: world-novel
+verdict_reason: trellis-coded quantization is classical (1989) but applying it as a POST-GPTQ refiner on int6 codes themselves is novel. RAS (Nov 2024) validates TQ + rANS as SOTA for learned compression but not in this exact composition.
+phd_defensible: yes — Viterbi decoder is well-understood, ablation against vanilla GPTQ is clean, theory connects to channel coding
+owner: G/Mac
+
+### EMB_dct_coefficient_energy_truncate
+added_utc: 20260408T0349Z
+source: C30#3 signal-processing pollination
+verdict: world-novel
+verdict_reason: DCT compression is classical (JPEG) but applying sparse DCT reconstruction to LEARNED embedding matrices in a byte-LM is unpublished. LESSONS §27 confirms 72% energy in 25% of coefficients on our specific embedding shape.
+phd_defensible: yes — clear hypothesis (energy compaction theorem), clear ablation (top-K sweep), theoretical grounding in spectral analysis
+owner: E
+
+### EMB_wavelet_hard_threshold_dyadic
+added_utc: 20260408T0349Z
+source: C30#3 — distinct from WaveletGPT
+verdict: world-novel
+verdict_reason: WaveletGPT (2409.12924) applies wavelets to ACTIVATIONS. Applying Daubechies-4 wavelet decomposition + hard thresholding to the tok_emb matrix (separating smooth-compressible dims from sharp-critical dims) is upstream and unpublished.
+phd_defensible: yes — multi-resolution analysis literature is rich, ablation against WaveletGPT clearly distinguishes contributions
+owner: E
+
+### EMB_polyphase_token_phase_routing
+added_utc: 20260408T0349Z
+source: C30#3 — audio codec polyphase (Bellanger, Crochiere-Rabiner)
+verdict: world-novel
+verdict_reason: polyphase decomposition is foundational in audio codecs (MPEG, AAC) but has NEVER been applied to vocabulary routing in LMs. True cross-domain transplant.
+phd_defensible: yes — direct theoretical mapping from frequency-domain decoupling to vocabulary phase routing, ablation vs uniform embed is straightforward
+owner: E
+
 ### FFN_squared_activation_sparsity_exploit
 added_utc: 20260408T0312Z
 source: C30#2 — arXiv:2503.16672 + custom synthesis
