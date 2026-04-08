@@ -2415,3 +2415,35 @@ For the THIRD time this session, I conflated "novel sublayer-selective applicati
 Queue: 161 entries, front of queue is the high-EV S2 confirms (TRUE_WINNERS_3WAY, normuon n=2, coprime_rope n=2, byte_weight n=2, NGRAM_BACKOFF, RIEMANNIAN_QKV, LEGAL_TTT) — all in flight or queued.
 
 C90 fired at 1133Z (RIEMANNIAN ship → just demoted). C30 fired at 1127Z (L03+L10 candidates) and 1141Z (L07+L09 candidates). Next C90 should pick a candidate from the new C30 backlog — probably **NGR_modified_kneser_ney_discount** (35 LOC, comp-novel + PhD-defensible, never tested in comp).
+
+## AUDIT_20260408T1747Z (C180)
+
+**Pods alive**: 8 (B/C/E/F/G/H/I/J), all 96-100% GPU
+**In-flight**: 8 unique experiments (3 NIGHT_MODE shots: B=GATED_NORM_PCT_LEGAL_TTT_seed1337, J=LEGAL_TTT_NGRAM_BACKOFF_seed42)
+**Spend**: $21.48 / $50 ceiling (warn tier, $3.52 to soft cap, $28.52 to hard cap)
+**Champion**: STACK_GATED_LEGAL_TTT n=2 mean **1.3711** (unchanged since 1255Z)
+**Layers locked**: 0 (no layer reaches 3 confirmed-wins)
+**Novelties demoted this cycle**: 0 (all world-novels held; STACK_GATED_NORM_PCT_LEGAL_TTT just confirmed FAIL but it was a stack experiment, not a layer slot)
+**World-novel-yes count**: 5 (L02_mdl, L05_norm_pct, L04_gated, L04_coprime_per_head, L11_lyapclip — last 2 demoted/neutral)
+**World-novel COMBINATIONS tested**: 5 (FIREHOSE_LEGAL_TTT, MDL_LEGAL_TTT_GATED, FIREHOSE_NORM_PCT, GATED_NORM_PCT_LEGAL_TTT, LEGAL_TTT_NGRAM_BACKOFF in flight)
+
+**KEY FINDING tonight**: LEGAL_TTT champion is BRITTLE — 4/4 ingredient stacks tested all return 1.40-1.42 region, never break 1.39. Only the bare 2-component (gated_attention + LEGAL_TTT) achieves 1.3711.
+
+**Recent comp PR audit (last 8h, since 0945Z C180)**:
+- **PR #1476** [Record] SP8192 + QK5 + Legal TTT — val_bpb 1.0842 (15:50Z) ★ — TTT now in comp
+- **PR #1477** Record: SP8192 + Parallel Residuals + Score-First TTT — val_bpb 1.0822 (17:11Z) ★
+- **PR #1478** Shallow Blue: BOS-Reset Exact Memory Probe (17:14Z) — different mechanism
+- **PR #1471** [Record] SP8192 + SDClip + 3L Depth Recurrence + EMA — 1.0866 (10:20Z)
+- **PR #1474** Vocab1792 FlashMuon LinearScaleInit XSA5LastGated RReLU2 Int6AWQ (12:07Z)
+- **PR #1473** 11L FullGPTQ + XSA-all + BigramHash 3072×112 — 1.11564 (11:43Z)
+
+**IMPLICATIONS**:
+1. **LEGAL_TTT is no longer world-novel as a standalone** — comp now uses it (PR #1476). Our LEGAL_TTT was always comp-port (Patch 45) so no demotion needed.
+2. **SP8192 + LEGAL_TTT is the new comp meta** — we have BPE-8192 built on Mac, need to deploy. Our champion gated_attention+LEGAL_TTT lacks SP8192. The combination SP8192+LEGAL_TTT with our gated_attention + bigram tables 8192v could push us into 1.0-1.1 territory.
+3. **Score-First TTT** (PR #1477) is a new TTT variant — research candidate for next C30 fire.
+4. **No world-novel demotions needed** — our COMBINATION claims (e.g., STACK_FIREHOSE_LEGAL_TTT) remain novel because no comp PR stacks the same combo.
+
+**Next priorities**:
+- Deploy SP8192 to a pod (test it ASAP)
+- Consider Score-First TTT as comp-novel candidate
+- Continue waiting for J's STACK_LEGAL_TTT_NGRAM_BACKOFF (n-gram path may bypass LEGAL_TTT brittleness)
