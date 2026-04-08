@@ -760,7 +760,8 @@ ceiling_actions:
 | gate | last_checked_utc | last_value | threshold | state | red_flag_ct |
 |---|---|---|---|---|---|
 | G1_tokens_per_min | 20260408T1503Z | 6.3M tok/min/pod (65k batch / 620 ms) | >=12.5M (3080Ti) / >=15M (3090) | DEGRADED-OK (S2 mode batch=65k smaller than full) | 0 |
-| G2_gpu_idle_streak | 20260408T1932Z | 0 idle streaks (all 8 pods 85-100%); F picked STACK_GATED_LEGAL_TTT_5STEPS_seed1337 confirm; H=LN_SCALE 41min; LR2X in queue for J | 0 streaks >5s util<80% | PASS | 0 |
+| G2_gpu_idle_streak | 20260408T1942Z | 0 idle streaks (all 8 pods 84-100%); H=LN_SCALE 51min (extremely long eval); J=LR2X_seed42 7min; F=5STEPS_seed1337 15min | 0 streaks >5s util<80% | PASS | 0 |
+| BONUS_NOTE | 20260408T1942Z | CMP_context_adaptive_rANS placeholder runs on H: n=2 mean (gated+normuon only, 2-way) = 1.40895 — worse than full 3-way (1.4054) confirming asym_skip_init adds value | N/A | INFO | 0 |
 | G3_artifact_bytes | 20260408T1330Z | ~16.7 MB (champion S2 stack) | >=16,252,928 B (16MB-0.5MB) | PASS | 0 |
 | G4_marker_count | 20260408T1503Z | 48/50 missing=['NS_STEPS_MARKER', 'XSA_MARKER'] | 46/46 expected (extras allowed) | PASS | 1 |
 | G5_queue_depth | 20260408T1503Z | min=4 pending (H/I/J after backup add), per_pod={'B':27,'C':17,'E':16,'F':22,'G':33,'H':4,'I':4,'J':4} | every pod >=1 pending | PASS | 0 |
