@@ -2858,6 +2858,99 @@ def quantize_float_tensor(t: Tensor) -> tuple[Tensor, Tensor]:"""
     else:
         print("  ✗ CMP_HESSIAN_BIT_BUDGET anchor not found — skipping")
 
+# Patch 48 (C90 build 1202Z, world-novel L07 #1): USE_LSS_FOCAL_LOSS=1 →
+# Focal loss with PER-BYTE-CLASS LEARNED γ. Standard focal loss (Lin et al. 2017,
+# arXiv:1708.02002) uses scalar γ to downweight easy examples via (1-p_t)^γ.
+# We extend with a LEARNABLE per-class γ vector, constrained to [0.5, 5.0] via
+# 0.5 + 4.5 * sigmoid(raw).
+#
+# Hypothesis: byte vocab is highly imbalanced (space/newline/ASCII dominate;
+# 0x00/0xFF/control chars <0.1%). Common bytes reach high confidence quickly
+# and drown gradient signal for rare bytes. Per-class learned γ lets the model
+# auto-discover which classes need stronger downweighting.
+#
+# L07 status: asym_label_smoothing DEMOTED, byte_weight marginal n=2 (-0.0004),
+# mtp screened-fail → ZERO confirmed L07 wins. Fresh angle, no prior PR uses it.
+#
+# Idempotent via LSS_FOCAL_LOSS_MARKER. Default OFF preserves baseline CE path.
+# Composes cleanly with MTP (wraps inner CE call), BYTE_WEIGHT/ASYM_LABEL_SMOOTHING
+# (both silently skip after MTP rewrite, no conflict).
+if "LSS_FOCAL_LOSS_MARKER" in content:
+    print("  ✓ LSS focal loss already applied")
+else:
+    # 1) Parameter init: anchor on the untouched self.final_norm = RMSNorm() line
+    #    in GPT.__init__. Always create the Parameter (1D, vocab_size floats ~4KB)
+    #    so checkpoints stay consistent; env var only gates the forward path.
+    old_focal_init = """        self.final_norm = RMSNorm()"""
+    new_focal_init = """        self.final_norm = RMSNorm()
+        # LSS_FOCAL_LOSS_MARKER: per-class learnable γ for focal loss (L07 novelty).
+        # Always constructed for checkpoint compat; forward path gated by env var.
+        self._focal_loss_enabled = bool(int(os.environ.get("USE_LSS_FOCAL_LOSS", "0")))
+        self._focal_gamma_raw = nn.Parameter(torch.zeros(vocab_size, dtype=torch.float32))"""
+    if old_focal_init in content:
+        content = content.replace(old_focal_init, new_focal_init)
+        print("  ✓ added LSS_FOCAL_LOSS Parameter init")
+    else:
+        print("  ✗ LSS_FOCAL_LOSS init anchor (self.final_norm) not found — skipping")
+
+    # 2) Optimizer registration: top-level GPT params are NOT picked up by
+    #    block_named_params (which only walks base_model.blocks). We must
+    #    explicitly append to scalar_params. Anchor on the untouched
+    #    skip_weights append block.
+    old_focal_opt = """    if base_model.skip_weights.numel() > 0:
+        scalar_params.append(base_model.skip_weights)"""
+    new_focal_opt = """    if base_model.skip_weights.numel() > 0:
+        scalar_params.append(base_model.skip_weights)
+    # LSS_FOCAL_LOSS_MARKER: register per-class γ vector with scalar Adam group.
+    # Registered unconditionally so optimizer state stays consistent; gets no
+    # gradient when env var is off (Adam None-grad path is no-op).
+    if hasattr(base_model, "_focal_gamma_raw"):
+        scalar_params.append(base_model._focal_gamma_raw)"""
+    if old_focal_opt in content:
+        content = content.replace(old_focal_opt, new_focal_opt)
+        print("  ✓ added LSS_FOCAL_LOSS scalar_params registration")
+    else:
+        print("  ✗ LSS_FOCAL_LOSS scalar_params anchor not found — skipping")
+
+    # 3) Forward loss wrap: replace the F.cross_entropy subexpression with a
+    #    ternary that dispatches to focal loss when enabled. At runtime this
+    #    string occurs exactly once — inside MTP's _main_loss = F.cross_entropy(...)
+    #    line (or pre-MTP, the original return F.cross_entropy(...)). Either way
+    #    the ternary works because we wrap the expression, not the statement.
+    old_focal_ce = """F.cross_entropy(logits.float(), targets, reduction="mean")"""
+    new_focal_ce = """(self._focal_loss_compute(logits, targets) if getattr(self, "_focal_loss_enabled", False) else F.cross_entropy(logits.float(), targets, reduction="mean"))"""
+    if content.count(old_focal_ce) == 1:
+        content = content.replace(old_focal_ce, new_focal_ce, 1)
+        print("  ✓ added LSS_FOCAL_LOSS forward ternary wrap")
+    else:
+        _n = content.count(old_focal_ce)
+        print(f"  ✗ LSS_FOCAL_LOSS CE anchor has {_n} matches (expected 1) — skipping")
+
+    # 3b) Inject the _focal_loss_compute helper method onto GPT. Anchor on the
+    #     forward() signature (untouched by all other patches except EMB_DCT,
+    #     which preserves it in its replacement).
+    old_focal_fwd_sig = """    def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:"""
+    new_focal_fwd_sig = """    def _focal_loss_compute(self, logits: Tensor, targets: Tensor) -> Tensor:
+        # LSS_FOCAL_LOSS_MARKER apply: focal loss with per-class learned γ.
+        # loss_i = (1 - p_t[i])^γ[target[i]] * -log p_t[i]
+        # γ_eff[c] = 0.5 + 4.5 * sigmoid(_focal_gamma_raw[c]) ∈ [0.5, 5.0]
+        logp = F.log_softmax(logits.float(), dim=-1)
+        targets_flat = targets.reshape(-1)
+        logp_t = logp.gather(-1, targets_flat.unsqueeze(-1)).squeeze(-1)
+        p_t = logp_t.exp()
+        gamma_eff = 0.5 + 4.5 * torch.sigmoid(self._focal_gamma_raw.float())
+        gamma_t = gamma_eff[targets_flat]
+        focal_weight = (1.0 - p_t).clamp_min(1e-7).pow(gamma_t)
+        loss_per_token = -focal_weight * logp_t
+        return loss_per_token.mean()
+
+    def forward(self, input_ids: Tensor, target_ids: Tensor) -> Tensor:"""
+    if old_focal_fwd_sig in content:
+        content = content.replace(old_focal_fwd_sig, new_focal_fwd_sig, 1)
+        print("  ✓ added LSS_FOCAL_LOSS _focal_loss_compute helper method")
+    else:
+        print("  ✗ LSS_FOCAL_LOSS forward() sig anchor not found — skipping")
+
 # Patch 47 (C90 build 1133Z, world-novel L08 #1): USE_OPT_RIEMANNIAN_GRAM_QKV=1 →
 # Apply Riemannian Stiefel-manifold tangent-space projection to the gradient
 # of attention Q/K/V weight matrices BEFORE the standard Newton-Schulz
@@ -3016,6 +3109,7 @@ expected = [
     "LEAKY_RELU_MARKER",
     "LEGAL_TTT_MARKER",
     "LN_SCALE_MARKER",
+    "LSS_FOCAL_LOSS_MARKER",
     "MOUSSE_MARKER",
     "MTP_MARKER",
     "MUONEQ_R_MARKER",
