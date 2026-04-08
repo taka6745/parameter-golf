@@ -44,6 +44,7 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 | STACK_LEGAL_TTT | - | 5-way (gated + norm_pct + asym_skip + asym_label + per_proj_lr) **+ LEGAL_TTT** | - | **2nd best, n=1** | S2 seed42=1.3726 (-0.0411 vs baseline) — DILUTED by null markers (asym_label, per_proj_lr) | 1.3726 (cheap G n=1) | G | 20260408T1212Z |
 | STACK_GATED_LEGAL_TTT | - | gated_attention + LEGAL_TTT (MINIMAL stack) | - | **🔥 ALL-TIME CHAMPION n=2 mean=1.3711** | S2 seed42=**1.3716** + seed1337=**1.3706** → mean=**1.3711** ★ (-0.0005 mean vs n=1, -0.0426 vs baseline; n=2 confirmed champion) | **1.3711** 🔥 (cheap G n=2) | G | 20260408T1459Z |
 | L10_compression | 4 | L10_qvdedup CMP_QUANT_VALUE_DEDUP | comp-novel | **n=1 confirmed-win, seed1337 in flight** | S2 seed42=**1.411** vs baseline 1.4137 = **-0.0027** (real win, value-dedup quant compression worked) | **1.411** (cheap G n=1) | G | 20260408T1458Z |
+| L08_optimizer | 8 | L08_emaswasta_S2confirm | comp-novel | **n=1 FAIL** | S2 seed42=**1.416** vs baseline 1.4137 = +0.0023 ABOVE (FAIL); seed1337 in flight | +0.0023 (cheap B n=1) | B | 20260408T1505Z |
 | L09_ngram | 3 | L09_ngram_backoff (Patch 46 Stupid Backoff Brants 2007) | comp-novel | **n=2 confirmed-win** | S2 seed42=1.4126 + seed1337=**1.4115** → mean=**1.41205** vs baseline 1.4137 = -0.00165 (real, small) | **1.41205** (cheap C n=2) | C | 20260408T1255Z |
 | L08_optimizer | 7 | OPT_RIEMANNIAN_GRAM_QKV (Patch 47, Riemannian Stiefel manifold projection on Q/K/V) | comp-novel (DEMOTED C180 1147Z) | **n=1 FAIL** | S2 seed42=**1.4161** vs baseline 1.4137 = +0.0024 ABOVE (confirms demotion) | +0.0024 (cheap B n=1) | B | 20260408T1255Z |
 | L04_attention | 5 | L04_coprime_per_head_rope | **yes (world-novel)** | **NEW confirmed-win** (S2 cheap-pod) | S2 seed42=**1.4109** ★ (n=1 needs seed1337) | **1.4109** ★ (cheap G n=1) | G | 20260408T1112Z |
@@ -746,7 +747,7 @@ ceiling_actions:
 | gate | last_checked_utc | last_value | threshold | state | red_flag_ct |
 |---|---|---|---|---|---|
 | G1_tokens_per_min | 20260408T1503Z | 6.3M tok/min/pod (65k batch / 620 ms) | >=12.5M (3080Ti) / >=15M (3090) | DEGRADED-OK (S2 mode batch=65k smaller than full) | 0 |
-| G2_gpu_idle_streak | 20260408T1503Z | 0 idle streaks (all 8 pods 96-100%) | 0 streaks >5s util<80% | PASS | 0 |
+| G2_gpu_idle_streak | 20260408T1505Z | 0 idle streaks (all 8 pods 100%) | 0 streaks >5s util<80% | PASS | 0 |
 | G3_artifact_bytes | 20260408T1330Z | ~16.7 MB (champion S2 stack) | >=16,252,928 B (16MB-0.5MB) | PASS | 0 |
 | G4_marker_count | 20260408T1503Z | 48/50 missing=['NS_STEPS_MARKER', 'XSA_MARKER'] | 46/46 expected (extras allowed) | PASS | 1 |
 | G5_queue_depth | 20260408T1503Z | min=4 pending (H/I/J after backup add), per_pod={'B':27,'C':17,'E':16,'F':22,'G':33,'H':4,'I':4,'J':4} | every pod >=1 pending | PASS | 0 |
