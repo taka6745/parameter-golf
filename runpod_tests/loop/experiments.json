@@ -1,5 +1,99 @@
 [
   {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "SEED": "42",
+    "name": "L06_asym_skip_init_S2confirm_seed42",
+    "pod_filter": [
+      "E"
+    ],
+    "USE_ASYMMETRIC_SKIP_INIT": "1"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "SEED": "42",
+    "name": "L07_asym_label_smooth_S2confirm_seed42",
+    "pod_filter": [
+      "F"
+    ],
+    "USE_ASYM_LABEL_SMOOTHING": "1"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "SEED": "42",
+    "name": "L04_gated_attention_S2confirm_seed42",
+    "pod_filter": [
+      "G"
+    ],
+    "USE_GATED_ATTENTION": "1"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "SEED": "42",
+    "name": "L08_per_proj_lr_split_S2confirm_seed42",
+    "pod_filter": [
+      "B"
+    ],
+    "USE_PER_PROJ_LR_SPLIT": "1"
+  },
+  {
+    "name": "G1_batch131k_seed42",
+    "pod_filter": [
+      "B"
+    ],
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "131072",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "1",
+    "SEED": "42"
+  },
+  {
     "name": "L08_chebns_seed42",
     "pod_filter": [
       "B"
