@@ -478,6 +478,62 @@ verdict_reason: 0 hits anywhere
 phd_defensible: yes    # options: yes | no | TBD
 owner: MAC
 
+### EMB_lsq_gradient_aware_embedding_quantization
+added_utc: 20260408T1127Z
+source: C30 1127Z research fire — LSQ ICLR 2020 + GWQ arXiv:2411.00850 byte-vocab synthesis
+websearch_terms: ["LSQ tied embedding byte LM", "gradient-aware bit allocation embedding row dimension", "learned step size embedding quantization 2025"]
+websearch_hits: 0 (LSQ for general LMs exists; LSQ + per-DIMENSION Fisher-bit-allocation for tied byte-vocab embeddings = 0)
+github_terms: ["LSQ tok_emb tied head", "GWQ byte language model embedding"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1127Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: LSQ paper (rkgO66VKDS) covers general weights; GWQ (arXiv:2411.00850) covers LLM weights but not embeddings; per-DIMENSION (not per-row) gradient-aware bit allocation for byte-LM tied embeddings is the new combination
+phd_defensible: yes — clear hypothesis (per-dim gradient variance predicts quant sensitivity), falsifiable ablation (uniform vs gradient-aware bit allocation sweep), 6-page workshop paper feasible
+owner: E
+
+### EMB_intrinsic_dimension_adaptive_projection
+added_utc: 20260408T1127Z
+source: C30 1127Z — arXiv:2503.02142 ID estimation + byte-vocab adaptation
+websearch_terms: ["intrinsic dimension byte vocabulary embedding adaptive", "ID estimation token embedding routing", "skipped SVD vocab embedding"]
+websearch_hits: 0
+github_terms: ["intrinsic_dimension byte vocab embed", "adaptive_projection byte LM"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1127Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: ID estimation papers exist (arXiv:2503.02142) but not for byte-vocab routing of embedding capacity. Distinct from existing #6 EMB_byte_adaptive_projection_mixing (entropy bucket gate, not ID).
+phd_defensible: yes — clear hypothesis (lower-ID byte clusters need fewer dims), clear ablation (gate-off control), connects to manifold-learning literature
+owner: E
+
+### CMP_context_adaptive_rANS_per_layer_predictor
+added_utc: 20260408T1127Z
+source: C30 1127Z — RAS arXiv:2511.04684 + EntroLLM arXiv:2505.02380 fusion
+websearch_terms: ["context-adaptive rANS per-layer LLM compression", "neural prior weight quantization rANS 2025", "learned CDF predictor LLM weight indices"]
+websearch_hits: 0 specific (rANS LM compression exists at high level; per-layer per-position learned predictor for quantized indices = 0)
+github_terms: ["rans_predictor llm", "context_adaptive_rans weight"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1127Z
+comp_pr_hits: 0 (only 2 BROTLI PRs in competition, 0 rANS)
+verdict: world-novel-candidate
+verdict_reason: distinct from existing L10 #10 CMP_asymmetric_numeric_systems_neural_prior — that one uses a single global predictor; this one uses per-layer predictors with position+previous-code context
+phd_defensible: yes — clear hypothesis (per-layer code distributions differ from global), falsifiable (cross-validate predictor; bits saved vs zlib baseline), workshop paper feasible on info-theoretic LM compression
+owner: G/Mac
+
+### CMP_learned_scalar_adaptive_clipping
+added_utc: 20260408T1127Z
+source: C30 1127Z — EfficientQAT ACL 2025 + per-layer extension
+websearch_terms: ["learned per-layer clip scalar int8 quantization", "absmax minus alpha sigma quantization clipping", "validation gradient learned quantization clip 2025"]
+websearch_hits: 0 (EfficientQAT exists for QAT; PTQ + zlib + learned scalar α via val-gradient = novel combination)
+github_terms: ["learned clip alpha quantization", "absmax minus alpha sigma int8"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1127Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: tighter clip via val-gradient learned α reduces outlier dominance → smaller serialized artifact via zlib LZ77 longer runs. Not in existing backlog (CMP_HESSIAN_BIT_BUDGET demoted; this is val-driven not Hessian-driven)
+phd_defensible: no — empirical engineering candidate; clear ablation but no clean theoretical mechanism. Useful as a comp-novel ship if it works.
+owner: G/Mac
+
 The PhD defensibility check (PD3) requires:
   - clear hypothesis + falsification criterion
   - clear theoretical or empirical mechanism
