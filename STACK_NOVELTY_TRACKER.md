@@ -209,6 +209,42 @@ verdict_reason: paper arXiv:2503.16672 demonstrates 2:4 sparsity for inference; 
 phd_defensible: yes — clear theory (intrinsic ReLU² sparsity matches 2:4 hardware pattern), clear ablation (mask on/off vs throughput), workshop paper on "exploiting activation function statistics for hardware-aware training"
 owner: F
 
+### TOK_hyperdimensional_byte_hdvector
+added_utc: 20260408T0750Z
+source: C30#7 cross-domain — Frady+Kleyko 2022 hyperdimensional computing
+verdict: world-novel
+verdict_reason: HDV-based tokenizer design absent from all published LLM tokenization papers (0 hits "hyperdimensional tokenizer", 0 hits in arXiv/COLM/ICLR 2025-2026). BoundlessBPE uses linguistic boundaries; SAVoR uses adaptive vocab; neither applies vector-space clustering during BPE merge ordering.
+phd_defensible: yes — HDV theory (Plate 1995, Frady-Kleyko 2022) is well-established, ablation against frequency-only baseline is clean, workshop paper feasible
+win_mechanism: vocab biased by byte-context affinity → fewer tokens for predictable regions → -0.06 to -0.14 BPB
+owner: D
+
+### TOK_audio_codec_mdct_alphabet
+added_utc: 20260408T0750Z
+source: C30#7 cross-domain — MP3/AAC MDCT filterbanks (Bellanger 1983, ITU-T G.722.1)
+verdict: world-novel
+verdict_reason: MDCT-based tokenizer vocab selection absent from literature (0 hits on "MDCT BPE merge" or "MDCT tokenizer"). Audio codec filterbanks studied for signal compression, never for discrete byte-sequence vocab building.
+phd_defensible: yes — clean cross-domain transplant theory + frequency-band analogy + ablation against MDCT-off baseline
+win_mechanism: vocab prioritizes high-MDCT-energy byte clusters → entropy-optimal token-boundary placement → -0.04 to -0.10 BPB
+owner: D
+
+### KER_fused_ngram_attention_triton
+added_utc: 20260408T0750Z
+source: C30#7 — custom Triton kernel fusion synthesis for (8h, 4kv, 64) GQA shape
+verdict: world-novel
+verdict_reason: 0 published Triton or CUDA kernels fuse (n-gram logit gather + GQA SDPA + residual accumulate) into 1 kernel. Triton has GQA kernels and n-gram bias examples separately, never fused.
+phd_defensible: yes — clear hypothesis (3 boundary crossings per attn → 1), measurable speedup, workshop paper on "fused n-gram attention for byte-LM"
+win_mechanism: -25 to -35% attn forward time → 20-25% more training steps in 10 min budget → -0.008 to -0.015 train_loss
+owner: G
+
+### RAM_persistent_kernel_step_unroll
+added_utc: 20260408T0750Z
+source: C30#7 — NVIDIA CUDA persistent kernel + torch.cuda.CUDAGraph full-step capture
+verdict: world-novel
+verdict_reason: CUDA graph capture of inner training loop is known (NVIDIA CUTLASS, Triton persistent kernels) but applying it to the FULL forward+backward+opt.step on a small byte-LM with persistent kernel + dual-stream scalar-op overlap is not in any LM training paper or comp PR.
+phd_defensible: yes — kernel launch overhead is measurable on small models, ablation vs eager is clean
+win_mechanism: -8 to -15% wall-clock step time → 8-15% more steps in budget → -0.010 to -0.020 BPB
+owner: B
+
 ### TOK_cross_boundary_supermerge_byte
 added_utc: 20260408T0635Z
 source: C30#6 — BoundlessBPE COLM 2025 (arXiv:2504.00178) + byte-level adaptation
