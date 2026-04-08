@@ -261,11 +261,13 @@
       "NGRAM_W_FOURGRAM": "0.20",
       "MAX_WALLCLOCK_SECONDS": "1500",
       "SKIP_FINAL_EVAL": "0",
-      "pod_filter": "['H']",
       "USE_GATED_ATTENTION": "1",
       "USE_NORMUON": "1",
       "SEED": "42"
-    }
+    },
+    "pod_filter": [
+      "H"
+    ]
   },
   {
     "name": "CMP_context_adaptive_rANS_seed1337",
@@ -281,11 +283,13 @@
       "NGRAM_W_FOURGRAM": "0.20",
       "MAX_WALLCLOCK_SECONDS": "1500",
       "SKIP_FINAL_EVAL": "0",
-      "pod_filter": "['H']",
       "USE_GATED_ATTENTION": "1",
       "USE_NORMUON": "1",
       "SEED": "1337"
-    }
+    },
+    "pod_filter": [
+      "H"
+    ]
   },
   {
     "name": "KER_cudagraph_persistent_seed42",
@@ -301,10 +305,12 @@
       "NGRAM_W_FOURGRAM": "0.20",
       "MAX_WALLCLOCK_SECONDS": "1500",
       "SKIP_FINAL_EVAL": "0",
-      "pod_filter": "['I']",
       "USE_GATED_ATTENTION": "1",
       "SEED": "42"
-    }
+    },
+    "pod_filter": [
+      "I"
+    ]
   },
   {
     "name": "KER_cudagraph_persistent_seed1337",
@@ -320,10 +326,12 @@
       "NGRAM_W_FOURGRAM": "0.20",
       "MAX_WALLCLOCK_SECONDS": "1500",
       "SKIP_FINAL_EVAL": "0",
-      "pod_filter": "['I']",
       "USE_GATED_ATTENTION": "1",
       "SEED": "1337"
-    }
+    },
+    "pod_filter": [
+      "I"
+    ]
   },
   {
     "name": "STRETCH_HymbaMamba2_seed42",
@@ -339,11 +347,13 @@
       "NGRAM_W_FOURGRAM": "0.20",
       "MAX_WALLCLOCK_SECONDS": "1500",
       "SKIP_FINAL_EVAL": "0",
-      "pod_filter": "['J']",
       "USE_GATED_ATTENTION": "1",
       "USE_NORMUON": "1",
       "SEED": "42"
-    }
+    },
+    "pod_filter": [
+      "J"
+    ]
   },
   {
     "name": "STRETCH_HymbaMamba2_seed1337",
@@ -359,11 +369,13 @@
       "NGRAM_W_FOURGRAM": "0.20",
       "MAX_WALLCLOCK_SECONDS": "1500",
       "SKIP_FINAL_EVAL": "0",
-      "pod_filter": "['J']",
       "USE_GATED_ATTENTION": "1",
       "USE_NORMUON": "1",
       "SEED": "1337"
-    }
+    },
+    "pod_filter": [
+      "J"
+    ]
   },
   {
     "USE_LEAKY_RELU": "1",
