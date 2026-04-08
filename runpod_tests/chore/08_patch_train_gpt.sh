@@ -1891,6 +1891,101 @@ else:
     else:
         print("  ✗ EMB_DCT forward anchor not found — skipping")
 
+# Patch 40 (C90 build #11, comp-port L08 #3): USE_WEIGHT_EMA_SWA=1 → maintain an
+# Exponential Moving Average shadow of model params (decay=0.997) updated after every
+# optimizer step + a Stochastic Weight Average buffer updated every 50 steps. At
+# quantization time, blend final = 0.5*current + 0.3*EMA + 0.2*SWA and quantize the
+# blend instead of the raw current params.
+#
+# This is the cheapest comp-port from the 1.07/1.08 SOTA stack (PR #1019 abaybektursun
+# uses EMA 0.997 + SWA every 50 steps). Worth -0.006 to -0.010 BPB. Smallest patch in
+# the 5 missing comp-ports list (COMP_PORT_GAPS.md). Ship FIRST.
+#
+# Why it works: training-final params land in a sharp local min that quantizes badly.
+# EMA + SWA average over a wider basin → smoother loss surface → smaller quant error.
+#
+# Stacks correctly with all optimizer patches (NORMUON, MUONEQ_R, MOUSSE, PER_PROJ_LR_SPLIT,
+# OPT_CHEBYSHEV_NS) because they all operate on grad → param BEFORE the EMA update hooks.
+# The EMA update reads the FINAL param state after every opt.step() regardless of which
+# optimizer produced it.
+#
+# Default OFF preserves bit-exact baseline.
+# Idempotent via WEIGHT_EMA_SWA_MARKER. Two anchor sites:
+#   A) line 1033 area — after opt.step() updates params
+#   B) line 1076 area — before quantize_state_dict_int8(base_model.state_dict())
+if "WEIGHT_EMA_SWA_MARKER" in content:
+    pass
+else:
+    # Anchor A: hook into the training loop after opt.step()
+    old_opt_step = """        for opt in optimizers:
+            opt.step()
+        zero_grad_all()"""
+    new_opt_step = """        for opt in optimizers:
+            opt.step()
+        # WEIGHT_EMA_SWA_MARKER apply: lazy-init + update EMA shadow + SWA buffer
+        if int(os.environ.get('USE_WEIGHT_EMA_SWA', '0')):
+            _ema_decay = float(os.environ.get('WEIGHT_EMA_DECAY', '0.997'))
+            _swa_every = int(os.environ.get('WEIGHT_SWA_EVERY', '50'))
+            global _wesa_ema, _wesa_swa, _wesa_swa_count
+            try:
+                _wesa_ema
+            except NameError:
+                _wesa_ema = {}
+                _wesa_swa = {}
+                _wesa_swa_count = 0
+            with torch.no_grad():
+                for _name, _p in base_model.named_parameters():
+                    if not _p.requires_grad:
+                        continue
+                    if _name not in _wesa_ema:
+                        _wesa_ema[_name] = _p.detach().clone()
+                        _wesa_swa[_name] = _p.detach().clone()
+                    else:
+                        _wesa_ema[_name].mul_(_ema_decay).add_(_p.detach(), alpha=1.0 - _ema_decay)
+                if (step + 1) % _swa_every == 0:
+                    _wesa_swa_count += 1
+                    for _name, _p in base_model.named_parameters():
+                        if not _p.requires_grad:
+                            continue
+                        # Running mean: swa += (current - swa) / count
+                        _wesa_swa[_name].add_(_p.detach() - _wesa_swa[_name], alpha=1.0 / _wesa_swa_count)
+        zero_grad_all()"""
+    if old_opt_step in content:
+        content = content.replace(old_opt_step, new_opt_step)
+        # Anchor B: substitute blended state_dict at quant time
+        old_quant = "    quant_obj, quant_stats = quantize_state_dict_int8(base_model.state_dict())"
+        new_quant = """    # WEIGHT_EMA_SWA_MARKER apply: blend final = 0.5*current + 0.3*EMA + 0.2*SWA
+    if int(os.environ.get('USE_WEIGHT_EMA_SWA', '0')):
+        try:
+            _wesa_ema
+            _blend_alpha = float(os.environ.get('WEIGHT_EMA_BLEND', '0.5'))
+            _blend_ema = float(os.environ.get('WEIGHT_EMA_WEIGHT', '0.3'))
+            _blend_swa = float(os.environ.get('WEIGHT_SWA_WEIGHT', '0.2'))
+            _wesa_state = {}
+            for _name, _p in base_model.state_dict().items():
+                if _name in _wesa_ema and _name in _wesa_swa:
+                    _wesa_state[_name] = (
+                        _blend_alpha * _p
+                        + _blend_ema * _wesa_ema[_name]
+                        + _blend_swa * _wesa_swa[_name]
+                    )
+                else:
+                    _wesa_state[_name] = _p
+            print(f"WEIGHT_EMA_SWA: blending {_blend_alpha}*current + {_blend_ema}*ema + {_blend_swa}*swa for quant")
+            quant_obj, quant_stats = quantize_state_dict_int8(_wesa_state)
+        except NameError:
+            print("WEIGHT_EMA_SWA: shadow not initialized (training was too short), falling back")
+            quant_obj, quant_stats = quantize_state_dict_int8(base_model.state_dict())
+    else:
+        quant_obj, quant_stats = quantize_state_dict_int8(base_model.state_dict())"""
+        if old_quant in content:
+            content = content.replace(old_quant, new_quant)
+            print("  ✓ added WEIGHT_EMA_SWA_MARKER (EMA 0.997 + SWA every 50 steps + blended quant)")
+        else:
+            print("  ✗ WEIGHT_EMA_SWA quant anchor not found — opt.step hook installed but quant not wired")
+    else:
+        print("  ✗ WEIGHT_EMA_SWA opt.step anchor not found — skipping")
+
 # Patch 39 (C90 build #9, world-novel L08 #2): USE_OPT_CHEBYSHEV_NS=1 → replace
 # Muon's 5-step Newton-Schulz orthogonalization with a 3-step Chebyshev-optimized
 # variant. Each of the 3 iterations uses its own (a,b,c) coefficient triple, tuned
@@ -2272,6 +2367,7 @@ expected = [
     "TABULATION_HASH_MARKER",
     "TOK_INPUT_SMOOTH_MARKER",
     "WAVELET_GPT_MARKER",
+    "WEIGHT_EMA_SWA_MARKER",
     "XSA_MARKER",
 ]
 missing = [m for m in expected if m not in src]

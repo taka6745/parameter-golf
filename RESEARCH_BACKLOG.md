@@ -39,7 +39,7 @@ These are NOT world-novel but ARE necessary baseline pieces. The SOTA val_bpb 1.
 | priority | name | source | hypothesis | expected_delta | novelty_estimate | code_skeleton_loc | added_utc |
 |---|---|---|---|---|---|---|---|
 | 1 | SP8192_VOCAB | C30#10 audit — SOTA stack uses 8192 vocab | expand vocabulary 1024→8192; rebuild bigram/trigram/4-gram tables for dense coverage; unlocks BigramHash 3072×112 cascade | -0.08 to -0.12 BPB | **comp-port** (highest impact missing piece) | 200 (chore script + tokenizer swap + table rebuild) | 20260408T0810Z |
-| 2 | WEIGHT_EMA_SWA_COMBO | C30#10 audit — PR #1019 abaybektursun | EMA 0.997 + SWA every 50 steps; final model is weighted blend; orthogonal to params | -0.006 to -0.010 BPB | **comp-port** (cheapest, ship FIRST) | 60 | 20260408T0810Z |
+| 2 | WEIGHT_EMA_SWA_COMBO | C30#10 audit — PR #1019 abaybektursun | EMA 0.997 + SWA every 50 steps; final model is weighted blend; orthogonal to params | -0.006 to -0.010 BPB | **comp-port** **SHIPPED 0815Z** as WEIGHT_EMA_SWA_MARKER | 100 | 20260408T0810Z |
 | 3 | GPTQ_FULL_HESSIAN_AR | C30#10 audit — PR #1019 abaybektursun | full Hessian GPTQ + autoregressive self-gen calibration (64×2048 tokens, temp=0.8); legality-safe (no train/val data access during quant) | -0.008 to -0.015 BPB | **comp-port** | 180 | 20260408T0810Z |
 | 4 | BIGRAMHASH_EXPAND_3072 | C30#10 audit — PR #1019 abaybektursun | scale BigramHash from 1536×64 → 3072×112; stays under 16 MB | -0.004 to -0.008 BPB | **comp-port** | 40 | 20260408T0810Z |
 | 5 | DEPTH_RECUR_NUM_LOOPS_3 | C30#10 audit — SOTA b27fe93 | DEPTH_RECUR with NUM_LOOPS=3 (vs our 1) — deeper recurrence over the same params | -0.005 to -0.010 BPB | **comp-port** | 20 (env var change + validation) | 20260408T0810Z |
