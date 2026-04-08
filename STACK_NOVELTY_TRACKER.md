@@ -31,6 +31,48 @@ ts_utc	pod_id	novelty_id	layer	env_diff	train_loss	n_seeds	log_path	results_id	e
 
 ## Section C — Novelty audit log
 
+### EMB_byte_adaptive_projection_mixing
+added_utc: 20260408T0245Z
+source: C30 research fire — Bolmo (2025) entropy-driven inversion + custom synthesis
+websearch_terms: ["entropy-gated adaptive embedding byte language model", "Bolmo-style projection mixing", "byte frequency adaptive embedding 2025"]
+websearch_hits: 0 specific (Bolmo's entropy ideas are about chunking, not embedding allocation)
+github_terms: ["entropy_bucket embedding", "adaptive byte projection mixing"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T0245Z
+comp_pr_hits: 0 (no PR in openai/parameter-golf uses entropy-bucketed embedding routing)
+verdict: world-novel
+verdict_reason: byte-LM literature uses entropy for token chunking (Bolmo) or sequence selection (Rho-1), never for per-token embedding-dim allocation. Inverting that to allocate dim by frequency is novel.
+phd_defensible: yes — clear hypothesis (rare bytes need less dim, common bytes need more, gated by unigram entropy bucket), clear ablation (gate on/off, dim ratio sweep), connects to information-theoretic LM literature
+owner: E
+
+### NGR_adaptive_cuckoo_hash_collision_free
+added_utc: 20260408T0245Z
+source: C30 research fire — Cuckoo hashing (Pagh-Rodler 2001) + TikTok Monolith embedding work + CMU 2024 perfect-hash OLAP study
+websearch_terms: ["cuckoo hash n-gram language model", "zero collision n-gram lookup transformer bias", "displaceable hash language bias 2024 2025"]
+websearch_hits: 0 (cuckoo is well-known but not applied to n-gram bias logit residuals)
+github_terms: ["cuckoo_hash n-gram", "cuckoo language bias"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T0245Z
+comp_pr_hits: 0 (audited 173+ open n-gram PRs, none use cuckoo)
+verdict: world-novel
+verdict_reason: cuckoo hash with displacement is standard in serving systems, never applied to neural n-gram bias residuals. Combining it with our existing tabulation framework yields true zero-collision lookups, making the bias additive noise unbiased.
+phd_defensible: yes — clear hypothesis (eliminates the systematic component of collision noise that even tabulation hashing leaves), clear ablation (cuckoo vs tabulation vs polynomial on the same NLL test from MINIPAPER_TABULATION_HASH.md), theoretically grounded in hash-table independence theory
+owner: C
+
+### NGR_counting_bloom_high_freq_suppress
+added_utc: 20260408T0245Z
+source: C30 research fire — countBF arXiv:2106.04364 + custom synthesis
+websearch_terms: ["counting bloom filter language model bias suppression", "n-gram frequency rank logit modulation", "high-frequency n-gram penalty transformer"]
+websearch_hits: 0 (Bloom filters are used in LM serving for vocab lookup, never for bias-strength modulation)
+github_terms: ["counting bloom n-gram", "frequency rank logit bias"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T0245Z
+comp_pr_hits: 0
+verdict: world-novel
+verdict_reason: combines two under-used ideas (approximate frequency sketches + frequency-aware logit modulation) targeting a specific failure mode (bias amplifying tokens the model already predicts confidently). No prior art on this exact combination for byte-level LM n-gram bias.
+phd_defensible: yes — clear hypothesis (high-confidence model + high-bias creates redundancy waste), clear falsification (measure entropy of bias-modified logits vs unmodified on confident predictions), connects to maximum-entropy regularization literature
+owner: C
+
 <!--
 Format: one ### <novelty_id> block each, with key:value lines:
 

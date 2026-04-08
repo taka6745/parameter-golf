@@ -42,6 +42,9 @@ Schema for every row:
 | 1 | EMB_dual_codebook_lloyd_max | LESSONS §37 | K-means cluster the 1024 embeddings into 64 prototypes + int4 residual; ~1.7 MB freed | -0.005 BPB indirect | comp-novel | 70 | 20260408T0000Z |
 | 2 | EMB_factorized_2matmul | LESSONS §22 | (vocab × 64 + 64 × 512) tied head; bypass tied-head constraint, save 1.87 MB | -0.003 BPB after spending freed bytes | comp-novel | 50 | 20260408T0000Z |
 | 3 | EMB_hadamard_rotated_tied | Plan-A WebSearch (PALU/HiRA ICLR 2025 extension) | precompose Walsh-Hadamard rotation R into tok_emb; logits unchanged exactly, but quant noise after rotation is uniformly spread → lower int4/int6 GPTQ error | -0.004 BPB at int6, -0.012 at int4 | world-novel-candidate | 90 (Hadamard buffer + GPTQ-aware rotate) | 20260408T0000Z |
+| 4 | EMB_poly_fourier_embed | C30 WebSearch — PETE arXiv:2505.02266 (May 2025) | replace learned tok_emb with Fourier polynomial expansion of token IDs ([cos(2πk/V), sin(2πk/V), ...]) + light MLP projection; saves ~0.5 MB → reallocate to n-gram tables | -0.008 BPB indirect | comp-novel | 45 | 20260408T0245Z |
+| 5 | EMB_tied_tensorized_tt | C30 WebSearch — arXiv:1901.10787 + arXiv:2401.12819 | TT-decompose tok_emb (1024×512) into ranks [1,16,16,1] and share factors with output projection (dynamic tying); saves ~1.2 MB | -0.006 BPB indirect | comp-novel | 80 | 20260408T0245Z |
+| 6 | EMB_byte_adaptive_projection_mixing | C30 novel synthesis — Bolmo (2025) entropy-driven inversion | learned sigmoid gate ϕ(byte_entropy_bucket) routes between (a) compact 512-d learned embedding for common bytes and (b) 256-d Fourier for rare bytes; allocates capacity by frequency | -0.007 BPB | **world-novel-candidate** | 70 | 20260408T0245Z |
 
 ---
 
@@ -104,6 +107,9 @@ Schema for every row:
 | 1 | NGR_entropy_adaptive_validate | Patch 14 | USE_ENTROPY_ADAPTIVE_NGRAM=1 — model-entropy-gated bias mixing (prior verdict invalid under broken batch) | -0.005 train_loss | comp-novel | 0 (env var) | 20260408T0000Z |
 | 2 | NGR_skipbigram_table | LESSONS §31 | skip-bigram table (Q-R trick); +0.28 bits/tok signal | -0.005 BPB | comp-novel | 80 (build script + bias apply) | 20260408T0000Z |
 | 3 | NGR_context_partitioned_tabulation | MINIPAPER_TABULATION_HASH extension | use a different tabulation table per (prev3 mod 16) slice → 16× n-gram capacity in same memory budget by partitioning input space at higher-order modulus | -0.008 train_loss | world-novel-candidate | 60 (16 sub-tables + selector) | 20260408T0000Z |
+| 4 | NGR_adaptive_cuckoo_hash_collision_free | C30 WebSearch — Cuckoo hashing (Wikipedia) + TikTok Monolith embedding work + CMU 2024 perfect hashing study | replace tabulation XOR with cuckoo hash (two hash functions + displacement table) → true zero collisions on the fly; bias mixing noise becomes purely stochastic instead of systematic | -0.006 BPB | **world-novel-candidate** | 120 | 20260408T0245Z |
+| 5 | NGR_kneser_ney_logit_bias | C30 WebSearch — Chen & Goodman 1998, revisited arXiv:1706.07786, applied to logit space | apply modified Kneser-Ney discount (count_distinct_contexts / count_total) to n-gram bias weight at lookup time → context-dependent bias strength, smoothes long-tail backs-off | -0.004 BPB | comp-novel | 45 | 20260408T0245Z |
+| 6 | NGR_counting_bloom_high_freq_suppress | C30 WebSearch — countBF arXiv:2106.04364 + custom synthesis | track n-gram bucket frequencies via 4-bit counting Bloom filter (~0.5 MB) and suppress bias for high-freq contexts (logit *= 1 − freq_rank/B) → avoids swamping the model on common patterns it already predicts confidently | -0.005 BPB | **world-novel-candidate** | 85 | 20260408T0245Z |
 
 ---
 
