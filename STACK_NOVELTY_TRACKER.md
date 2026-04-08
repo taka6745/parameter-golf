@@ -611,6 +611,76 @@ verdict_reason: distinct from #3 CTX_PARTITIONED_TAB (which partitions the HASH 
 phd_defensible: no — engineering candidate. The position-class boundaries are arbitrary, no clean theoretical motivation. Comp-novel ship if it works.
 owner: C
 
+### TOK_kraft_inequality_merge_validator
+added_utc: 20260408T1212Z
+source: C30 1212Z (info-theory pollination) — Kraft 1949 + ICLR 2025 info-theory tokenization arXiv:2601.09039
+websearch_terms: ["kraft inequality BPE merge tokenizer", "prefix code BPE constraint", "kraft inequality vocabulary construction byte LM"]
+websearch_hits: 0 (Kraft is foundational 1949; never applied as active BPE merge filter)
+github_terms: ["kraft_inequality_BPE", "prefix_code_tokenizer_validator"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1212Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: Kraft inequality is published 1949 foundational result. Applying it as a BPE merge ranking validator is the new combination. The ICLR 2025 info-theory tokenization paper frames tokenization as channel design but doesn't use Kraft as a merge filter.
+phd_defensible: yes — clear theoretical mechanism (prefix-free property → minimal codeword length), falsifiable ablation (Kraft validator on/off vs frequency-only), workshop paper feasible
+owner: D
+
+### TOK_arithmetic_coding_merge_frequency
+added_utc: 20260408T1212Z
+source: C30 1212Z (info-theory pollination) — Arithmetic Coding (Rissanen 1976) + BLT (Meta 2024)
+websearch_terms: ["arithmetic coding BPE merge tokenizer", "AC-optimized tokenizer byte LM", "arithmetic code length merge ranking"]
+websearch_hits: 0
+github_terms: ["arithmetic_coding_BPE", "ac_merge_ranking"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1212Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: arithmetic coding is well-studied; BPE is well-studied. Applying AC codeword length as a BPE merge criterion is unpublished. BLT uses entropy peaks for patch boundaries — different mechanism.
+phd_defensible: yes — clear hypothesis (AC-optimal merges → entropy-aligned vocab), connects to source coding theory, workshop paper feasible
+owner: D
+
+### TOK_kolmogorov_complexity_pruning_inference
+added_utc: 20260408T1212Z
+source: C30 1212Z (info-theory pollination) — Kolmogorov 1965 + Neural NCD arXiv:2410.15280 + MDL Rissanen 1978
+websearch_terms: ["Kolmogorov complexity tokenizer pruning", "MDL vocabulary pruning byte LM", "neural compression distance token rank"]
+websearch_hits: 0
+github_terms: ["kolmogorov_token_prune", "mdl_vocab_rebalance"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1212Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: Kolmogorov complexity / MDL is canonical theory; never applied to byte-LM vocabulary pruning. Neural NCD is recent (2024) and orthogonal — this is novel synthesis.
+phd_defensible: yes — MDL theorem provides clean motivation, ablation against frequency-only pruning is straightforward, workshop paper feasible
+owner: D
+
+### DAT_mdl_compressible_first_reorder
+added_utc: 20260408T1212Z
+source: C30 1212Z (info-theory pollination) — MDL Rissanen 1978 + arXiv:2504.09597 (Understanding LLM Behaviors via Compression)
+websearch_terms: ["MDL shard reordering byte LM", "incompressible-first curriculum LM", "anti-curriculum MDL data ordering"]
+websearch_hits: 0 (curriculum-by-entropy exists; INVERSE anti-curriculum + MDL justification is new)
+github_terms: ["mdl_shard_reorder", "incompressible_first_curriculum"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1212Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: standard curriculum is easy-first (high compressibility = predictable). MDL-justified anti-curriculum (incompressible first) is the inverse and unpublished for byte-LM. Distinct from existing DAT_byte_entropy_curriculum (which is easy-first).
+phd_defensible: yes — clear theoretical grounding (MDL theorem), clear ablation (incompressible-first vs compressible-first vs random), workshop paper feasible
+owner: D
+
+### DAT_entropy_rank_quartet_stratified
+added_utc: 20260408T1212Z
+source: C30 1212Z (info-theory pollination) — entropy stratification + smooth curriculum learning
+websearch_terms: ["entropy quartile stratified curriculum LM", "smooth entropy curriculum byte language model", "4-bin entropy curriculum data"]
+websearch_hits: 0 (standard curriculum uses loss-sampling Rho-1 or class-rebalance; smooth quartile stratification is new)
+github_terms: ["entropy_quartile_curriculum", "stratified_entropy_lm"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1212Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: entropy-ranked stratification with smooth (per-epoch ratio) curriculum transition is unpublished. Avoids the abrupt phase transitions of standard curricula.
+phd_defensible: yes — info-theoretic stratification + curriculum learning grounding, falsifiable via single-quartile vs balanced ablation, workshop paper feasible
+owner: D
+
 The PhD defensibility check (PD3) requires:
   - clear hypothesis + falsification criterion
   - clear theoretical or empirical mechanism
