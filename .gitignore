@@ -9,3 +9,7 @@ data/docs_selected.jsonl
 .mypy_cache/
 .venv
 logs/
+runpod_tests/loop/pod_id.txt
+runpod_tests/loop/gpu_util.log
+runpod_tests/loop/gpu_util.pid
+POD_HOSTS.env

@@ -11,6 +11,36 @@
 set -u
 cd /workspace/paramgolf
 
+# preflight() — branch hygiene + dirty-tree restore + GPU util sampler launch.
+# Called at the top of every loop iteration so the campaign self-heals from:
+#   - wrong-branch checkouts (the sota-prikshit-hymba11-muon regression)
+#   - dirty trees from prior failed patcher runs
+#   - missing gpu_util.log sampler (needed by Gate G2)
+preflight() {
+    # 1. Branch must be main
+    BR=$(git branch --show-current 2>/dev/null || echo "?")
+    if [ "$BR" != "main" ]; then
+        echo "PREFLIGHT_WARN: branch=$BR expected=main — checking out main"
+        git checkout main 2>&1 | tail -3 || true
+    fi
+
+    # 2. Restore train_gpt.py from backup if available (patcher will reapply)
+    if [ -f train_gpt.py.bak ]; then
+        cp train_gpt.py.bak train_gpt.py
+    fi
+
+    # 3. Launch the GPU util sampler if not already running.
+    # Single long-lived process via PID file so we don't fork-bomb across loop cycles.
+    PIDFILE=runpod_tests/loop/gpu_util.pid
+    if [ ! -f "$PIDFILE" ] || ! kill -0 "$(cat "$PIDFILE" 2>/dev/null)" 2>/dev/null; then
+        nohup nvidia-smi --query-gpu=utilization.gpu,memory.used \
+            --format=csv,noheader -l 5 \
+            >> runpod_tests/loop/gpu_util.log 2>/dev/null &
+        echo $! > "$PIDFILE"
+        echo "PREFLIGHT: launched gpu_util sampler pid=$(cat $PIDFILE)"
+    fi
+}
+
 # Take over the GPU (only kill OTHER experiment_runner instances)
 ME=$$
 for pid in $(pgrep -f experiment_runner.py 2>/dev/null); do
@@ -23,6 +53,8 @@ mkdir -p runpod_tests/loop/logs
 echo "=== run_forever launched at $(date -u) PID=$ME ==="
 
 while true; do
+    # PD5: pre-flight branch + tree + GPU sampler before pulling code.
+    preflight
     # Auto-pull latest experiments / runner code before each restart.
     # --autostash because the patcher modifies train_gpt.py locally.
     git pull --rebase --autostash 2>&1 | tail -3 || true

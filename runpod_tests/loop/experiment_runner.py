@@ -75,6 +75,19 @@ def load_results() -> list[dict]:
     return out
 
 
+def _read_pod_id():
+    """Read this pod's id from runpod_tests/loop/pod_id.txt (gitignored).
+
+    Returns the pod id string, or None on any failure — the runner then falls
+    back to "all experiments eligible" (existing round-robin behavior preserved).
+    """
+    pod_id_file = LOOP_DIR / "pod_id.txt"
+    try:
+        return pod_id_file.read_text().strip() or None
+    except FileNotFoundError:
+        return None
+
+
 def pick_next(experiments: list[dict], results: list[dict]) -> dict:
     """Pick the experiment with the fewest TOTAL attempts (success + crash).
 
@@ -82,6 +95,10 @@ def pick_next(experiments: list[dict], results: list[dict]) -> dict:
     2 seconds will get picked forever, burning compute and never letting other
     experiments run. We DO down-weight successes by counting them as 1 and
     crashes as 1 attempt (not 0), so the round-robin still progresses.
+
+    pod_filter (added 2026-04-08 for the stack-novelty campaign): if an
+    experiment has a `pod_filter` key (list of pod ids), it's only eligible
+    on those pods. Experiments without `pod_filter` are open to all pods.
     """
     success_counts: dict[str, int] = {}
     crash_counts: dict[str, int] = {}
@@ -91,7 +108,21 @@ def pick_next(experiments: list[dict], results: list[dict]) -> dict:
             success_counts[name] = success_counts.get(name, 0) + 1
         else:
             crash_counts[name] = crash_counts.get(name, 0) + 1
+
+    # PD1 / pod_filter: drop experiments not assigned to this pod.
+    pod_id = _read_pod_id()
     indexed = list(enumerate(experiments))
+    if pod_id is not None:
+        indexed = [
+            iv for iv in indexed
+            if not iv[1].get("pod_filter")  # no filter = open to all
+            or pod_id in iv[1]["pod_filter"]
+        ]
+        if not indexed:
+            # No experiment is assigned to this pod — fall back to all so the
+            # pod stays busy until the queue is updated.
+            indexed = list(enumerate(experiments))
+
     # Skip experiments that have crashed >= 3 times in a row (without success)
     # to avoid a hot crash loop. They can be re-enabled by editing the queue.
     eligible = [iv for iv in indexed if crash_counts.get(iv[1]["name"], 0) < 3 or success_counts.get(iv[1]["name"], 0) > 0]

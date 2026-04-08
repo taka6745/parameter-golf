@@ -1390,3 +1390,46 @@ PYEOF
 echo
 echo "✓ train_gpt.py patched for PyTorch 2.4"
 echo "  To revert: cp train_gpt.py.bak train_gpt.py"
+
+# G4 marker integrity check (added 2026-04-08 for the stack-novelty campaign).
+# Counts the 26 expected patch markers in train_gpt.py and exits 2 if any are
+# missing. The watchdog cron + run_forever loop catches a non-zero exit and
+# disables the pod after 3 consecutive failures, preventing the kind of silent
+# anchor-break the EngramLite patch caused last session.
+python3 - <<'PYEOF_INTEGRITY'
+import sys, pathlib
+src = pathlib.Path("train_gpt.py").read_text()
+expected = [
+    "BYTE_WEIGHT_MARKER",
+    "COPRIME_STRIDE_MARKER",
+    "DEPTH_RECUR_MARKER",
+    "ENGRAM_LITE_MARKER",
+    "ENTROPY_ADAPTIVE_NGRAM_MARKER",
+    "GATED_ATTENTION_MARKER",
+    "LEAKY_RELU_MARKER",
+    "LN_SCALE_MARKER",
+    "MOUSSE_MARKER",
+    "MTP_MARKER",
+    "MUONEQ_R_MARKER",
+    "NGRAM_BIAS_MARKER",
+    "NGRAM_GATE_MARKER",
+    "NORMUON_MARKER",
+    "NS_STEPS_MARKER",
+    "PARALLEL_RESIDUALS_MARKER",
+    "PARTIAL_ROPE_MARKER",
+    "PHASE_TRANSITION_MARKER",
+    "PROG_SEQ_INIT_MARKER",
+    "SKIP_FINAL_EVAL_MARKER",
+    "SKIP_LAST_VAL_MARKER",
+    "SKIP_POST_LOOP_MARKER",
+    "SMEAR_GATE_MARKER",
+    "TABULATION_HASH_MARKER",
+    "WAVELET_GPT_MARKER",
+    "XSA_MARKER",
+]
+missing = [m for m in expected if m not in src]
+print(f"MARKERS_PRESENT_IN_TRAIN_GPT_PY: {len(expected)-len(missing)}/{len(expected)}")
+if missing:
+    print(f"  MISSING: {missing}")
+    sys.exit(2)
+PYEOF_INTEGRITY
