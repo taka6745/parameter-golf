@@ -152,6 +152,44 @@
     "NGRAM_W_BIGRAM": "0.25",
     "NGRAM_W_TRIGRAM": "0.25",
     "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L08_riemannian_qkv_S2_seed42",
+    "pod_filter": [
+      "B"
+    ],
+    "USE_OPT_RIEMANNIAN_GRAM_QKV": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L08_riemannian_qkv_S2_seed1337",
+    "pod_filter": [
+      "B"
+    ],
+    "USE_OPT_RIEMANNIAN_GRAM_QKV": "1",
+    "SEED": "1337"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
     "MAX_WALLCLOCK_SECONDS": "2400",
     "SKIP_FINAL_EVAL": "0",
     "USE_LEGAL_TTT": "1",

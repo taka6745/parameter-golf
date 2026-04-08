@@ -2858,6 +2858,128 @@ def quantize_float_tensor(t: Tensor) -> tuple[Tensor, Tensor]:"""
     else:
         print("  ✗ CMP_HESSIAN_BIT_BUDGET anchor not found — skipping")
 
+# Patch 47 (C90 build 1133Z, world-novel L08 #1): USE_OPT_RIEMANNIAN_GRAM_QKV=1 →
+# Apply Riemannian Stiefel-manifold tangent-space projection to the gradient
+# of attention Q/K/V weight matrices BEFORE the standard Newton-Schulz
+# orthogonalization. The Q/K/V projection matrices naturally live on a Stiefel
+# manifold (near-orthogonal frames); standard Muon NS is a Euclidean retraction
+# applied post-update. Adding an explicit Riemannian tangent-space projection
+# step respects the manifold geometry of orthogonal frames.
+#
+# Math: for W in Stiefel manifold St(n,p), the tangent projector is
+#     P_W(G) = G - W @ sym(W^T @ G)
+#            = G - 0.5 * W @ (W^T @ G + G^T @ W)
+# We apply this to the momentum-updated gradient g BEFORE NS, and ONLY for
+# Q/K/V weight tensors (not MLP weights; not embeddings).
+#
+# World-novel: arXiv:2508.17901 (Aug 2025) describes Riemannian Stiefel
+# optimization, but NO prior work applies it selectively to attention Q/K/V
+# as a pre-NS tangent projection inside a Muon-style optimizer.
+#
+# Composes with PER_PROJ_LR_SPLIT (P30), OPT_CHEBYSHEV_NS (P37), NORMUON,
+# MUONEQ_R, NS_STEPS — see anchor docs in the patch body.
+# Idempotent via OPT_RIEMANNIAN_GRAM_QKV_MARKER. Default OFF preserves baseline.
+if "OPT_RIEMANNIAN_GRAM_QKV_MARKER" in content:
+    print("  ✓ OPT_RIEMANNIAN_GRAM_QKV already applied")
+else:
+    # Step 1: insert the Q/K/V id registry + tangent projector helper before
+    # the Muon class definition. Anchor on the existing class header.
+    old_muon_header = "class Muon(torch.optim.Optimizer):\n    def __init__(self, params, lr: float, momentum: float, backend_steps: int, nesterov: bool = True):"
+    new_muon_header = '''# OPT_RIEMANNIAN_GRAM_QKV_MARKER — world-novel L08 patch (C90 1133Z).
+# Module-level registry of parameter ids that live on the Stiefel manifold
+# (attention Q/K/V weight matrices). Populated from main() right after
+# block_named_params is built. Empty by default; only consulted when
+# USE_OPT_RIEMANNIAN_GRAM_QKV=1.
+_QKV_STIEFEL_PARAM_IDS: set = set()
+
+
+def _riemannian_stiefel_tangent_project(W, G):
+    """Project gradient G onto the tangent space of the Stiefel manifold at W.
+
+    For W with W^T W ≈ I (orthogonal frame), the tangent projector is
+        P_W(G) = G - W @ sym(W^T @ G),  sym(A) = 0.5 * (A + A^T)
+    This removes the component of G that would move W off the manifold.
+
+    Handles both tall (n >= p) and wide (n < p) matrices symmetrically.
+    Cast to float32 internally for numerical stability of the symmetrization,
+    then cast back to G.dtype.
+    """
+    orig_dtype = G.dtype
+    W32 = W.to(torch.float32)
+    G32 = G.to(torch.float32)
+    if W32.size(0) >= W32.size(1):
+        # tall: W is (n, p), n >= p
+        WtG = W32.T @ G32
+        sym = 0.5 * (WtG + WtG.T)
+        G_tan = G32 - W32 @ sym
+    else:
+        # wide: W is (n, p), n < p
+        GWt = G32 @ W32.T
+        sym = 0.5 * (GWt + GWt.T)
+        G_tan = G32 - sym @ W32
+    return G_tan.to(orig_dtype)
+
+
+class Muon(torch.optim.Optimizer):
+    def __init__(self, params, lr: float, momentum: float, backend_steps: int, nesterov: bool = True):'''
+    if old_muon_header in content:
+        content = content.replace(old_muon_header, new_muon_header)
+        print("  ✓ OPT_RIEMANNIAN_GRAM_QKV: added tangent-projector helper + QKV id registry")
+    else:
+        print("  ✗ OPT_RIEMANNIAN_GRAM_QKV: Muon class header anchor not found — skipping")
+
+    # Step 2: inject the pre-NS projection call inside Muon.step(). Anchor
+    # on the Nesterov branch (stable, untouched by other L08 patches).
+    old_nesterov = """                    if nesterov:
+                        g = g.add(buf, alpha=momentum)"""
+    new_nesterov = """                    if nesterov:
+                        g = g.add(buf, alpha=momentum)
+                    # OPT_RIEMANNIAN_GRAM_QKV_MARKER: project grad onto Stiefel tangent space
+                    # ONLY for attention Q/K/V matrices (not MLP). Defaults to no-op.
+                    if (
+                        int(os.environ.get('USE_OPT_RIEMANNIAN_GRAM_QKV', '0'))
+                        and id(p) in _QKV_STIEFEL_PARAM_IDS
+                    ):
+                        g = _riemannian_stiefel_tangent_project(p.data, g)"""
+    if old_nesterov in content:
+        content = content.replace(old_nesterov, new_nesterov)
+        print("  ✓ OPT_RIEMANNIAN_GRAM_QKV: wired pre-NS Stiefel projection call")
+    else:
+        print("  ✗ OPT_RIEMANNIAN_GRAM_QKV: Nesterov anchor not found — skipping")
+
+    # Step 3: populate _QKV_STIEFEL_PARAM_IDS from block_named_params right
+    # after it is built in main().
+    old_mp_build = """    block_named_params = list(base_model.blocks.named_parameters())
+    matrix_params = [
+        p
+        for name, p in block_named_params
+        if p.ndim == 2 and not any(pattern in name for pattern in CONTROL_TENSOR_NAME_PATTERNS)
+    ]"""
+    new_mp_build = """    block_named_params = list(base_model.blocks.named_parameters())
+    matrix_params = [
+        p
+        for name, p in block_named_params
+        if p.ndim == 2 and not any(pattern in name for pattern in CONTROL_TENSOR_NAME_PATTERNS)
+    ]
+    # OPT_RIEMANNIAN_GRAM_QKV_MARKER: populate Stiefel-manifold param id registry
+    # with attention Q/K/V weight tensors (c_q/c_k/c_v from CausalSelfAttention).
+    # Safe to run unconditionally — registry only consulted when env var = 1.
+    _QKV_STIEFEL_PARAM_IDS.clear()
+    for _rgqkv_name, _rgqkv_p in block_named_params:
+        if _rgqkv_p.ndim != 2:
+            continue
+        if (".c_q.weight" in _rgqkv_name
+                or ".c_k.weight" in _rgqkv_name
+                or ".c_v.weight" in _rgqkv_name):
+            _QKV_STIEFEL_PARAM_IDS.add(id(_rgqkv_p))
+    if int(os.environ.get('USE_OPT_RIEMANNIAN_GRAM_QKV', '0')):
+        print(f"OPT_RIEMANNIAN_GRAM_QKV: registered {len(_QKV_STIEFEL_PARAM_IDS)} Q/K/V Stiefel params")"""
+    if old_mp_build in content:
+        content = content.replace(old_mp_build, new_mp_build)
+        print("  ✓ OPT_RIEMANNIAN_GRAM_QKV: populated Q/K/V id registry from block_named_params")
+    else:
+        print("  ✗ OPT_RIEMANNIAN_GRAM_QKV: matrix_params build anchor not found — skipping")
+
 with open("train_gpt.py", "w") as f:
     f.write(content)
 PYEOF
@@ -2905,6 +3027,7 @@ expected = [
     "NORMUON_MARKER",
     "NS_STEPS_MARKER",
     "OPT_CHEBYSHEV_NS_MARKER",
+    "OPT_RIEMANNIAN_GRAM_QKV_MARKER",
     "PARALLEL_RESIDUALS_MARKER",
     "PARTIAL_ROPE_MARKER",
     "PER_PROJ_LR_SPLIT_MARKER",
