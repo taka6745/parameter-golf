@@ -1444,6 +1444,306 @@ else:
     else:
         print("  ✗ NORM_PCT_DROPOUT anchor not found — skipping")
 
+# Patch 28 (C90 mass-build, world-novel L04 #1): USE_COPRIME_PER_HEAD_ROPE=1 → each
+# attention head uses a DIFFERENT prime base in rotary inv_freq. 8 coprime primes
+# (10007/10009/10037/10039/10061/10067/10069/10079) → distinct positional spectra
+# per head, reduces head redundancy at zero parameter cost.
+# Source: STACK_NOVELTY_PLAN.md L04 + RESEARCH_BACKLOG.md L04 row 3.
+# Idempotent via COPRIME_PER_HEAD_ROPE_MARKER.
+if "COPRIME_PER_HEAD_ROPE_MARKER" in content:
+    print("  ✓ coprime per-head rope already applied")
+else:
+    old_rot_init = """class Rotary(nn.Module):
+    # Caches cos/sin tables per sequence length on the current device.
+    def __init__(self, dim: int, base: float = 10000.0):
+        super().__init__()
+        inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+        self._seq_len_cached = 0
+        self._cos_cached: Tensor | None = None
+        self._sin_cached: Tensor | None = None"""
+    new_rot_init = """class Rotary(nn.Module):
+    # Caches cos/sin tables per sequence length on the current device.
+    def __init__(self, dim: int, base: float = 10000.0, num_heads: int = 1, num_kv_heads: int = 1):
+        super().__init__()
+        # COPRIME_PER_HEAD_ROPE_MARKER: optionally per-head distinct prime bases
+        self._coprime_ph_rope = bool(int(os.environ.get("USE_COPRIME_PER_HEAD_ROPE", "0")))
+        self._n_heads_rope = num_heads
+        self._n_kv_heads_rope = num_kv_heads
+        if self._coprime_ph_rope and num_heads > 1:
+            _PRIMES = [10007.0, 10009.0, 10037.0, 10039.0, 10061.0, 10067.0, 10069.0, 10079.0]
+            _ph_bases = torch.tensor(
+                [_PRIMES[h % len(_PRIMES)] for h in range(num_heads)], dtype=torch.float32
+            )
+            _exp = (torch.arange(0, dim, 2, dtype=torch.float32) / dim)
+            inv_freq = 1.0 / (_ph_bases.unsqueeze(-1) ** _exp.unsqueeze(0))
+        else:
+            inv_freq = 1.0 / (base ** (torch.arange(0, dim, 2, dtype=torch.float32) / dim))
+        self.register_buffer("inv_freq", inv_freq, persistent=False)
+        self._seq_len_cached = 0
+        self._cos_cached: Tensor | None = None
+        self._sin_cached: Tensor | None = None
+        self._cos_k_cached: Tensor | None = None
+        self._sin_k_cached: Tensor | None = None"""
+    if old_rot_init in content:
+        content = content.replace(old_rot_init, new_rot_init)
+        print("  ✓ patched Rotary.__init__ for per-head primes")
+    else:
+        print("  ✗ COPRIME_PER_HEAD_ROPE Rotary __init__ anchor not found — skipping")
+
+    old_rot_fwd = """    def forward(self, seq_len: int, device: torch.device, dtype: torch.dtype) -> tuple[Tensor, Tensor]:
+        if (
+            self._cos_cached is None
+            or self._sin_cached is None
+            or self._seq_len_cached != seq_len
+            or self._cos_cached.device != device
+        ):
+            t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
+            freqs = torch.outer(t, self.inv_freq.to(device))
+            self._cos_cached = freqs.cos()[None, None, :, :]
+            self._sin_cached = freqs.sin()[None, None, :, :]
+            self._seq_len_cached = seq_len
+        return self._cos_cached.to(dtype=dtype), self._sin_cached.to(dtype=dtype)"""
+    new_rot_fwd = """    def forward(self, seq_len: int, device: torch.device, dtype: torch.dtype) -> tuple[Tensor, Tensor]:
+        if (
+            self._cos_cached is None
+            or self._sin_cached is None
+            or self._seq_len_cached != seq_len
+            or self._cos_cached.device != device
+        ):
+            t = torch.arange(seq_len, device=device, dtype=self.inv_freq.dtype)
+            if self._coprime_ph_rope and self.inv_freq.dim() == 2:
+                # COPRIME_PER_HEAD_ROPE_MARKER apply: per-head freqs (1, H, T, half)
+                freqs = torch.einsum("t,hd->htd", t, self.inv_freq.to(device))
+                self._cos_cached = freqs.cos().unsqueeze(0)
+                self._sin_cached = freqs.sin().unsqueeze(0)
+                _group = max(1, self._n_heads_rope // max(self._n_kv_heads_rope, 1))
+                self._cos_k_cached = self._cos_cached[:, ::_group]
+                self._sin_k_cached = self._sin_cached[:, ::_group]
+            else:
+                freqs = torch.outer(t, self.inv_freq.to(device))
+                self._cos_cached = freqs.cos()[None, None, :, :]
+                self._sin_cached = freqs.sin()[None, None, :, :]
+                self._cos_k_cached = self._cos_cached
+                self._sin_k_cached = self._sin_cached
+            self._seq_len_cached = seq_len
+        return self._cos_cached.to(dtype=dtype), self._sin_cached.to(dtype=dtype)"""
+    if old_rot_fwd in content:
+        content = content.replace(old_rot_fwd, new_rot_fwd)
+        print("  ✓ patched Rotary.forward for per-head emission")
+    else:
+        print("  ✗ COPRIME_PER_HEAD_ROPE Rotary forward anchor not found — skipping")
+
+    old_csa_rot_ctor = """        self.rotary = Rotary(self.head_dim, base=rope_base)"""
+    new_csa_rot_ctor = """        self.rotary = Rotary(self.head_dim, base=rope_base, num_heads=num_heads, num_kv_heads=num_kv_heads)"""
+    if old_csa_rot_ctor in content:
+        content = content.replace(old_csa_rot_ctor, new_csa_rot_ctor)
+        print("  ✓ wired num_heads/num_kv_heads into Rotary constructor")
+
+    old_csa_apply = """        cos, sin = self.rotary(seqlen, x.device, q.dtype)
+        q = apply_rotary_emb(q, cos, sin)
+        k = apply_rotary_emb(k, cos, sin)"""
+    new_csa_apply = """        cos, sin = self.rotary(seqlen, x.device, q.dtype)
+        # COPRIME_PER_HEAD_ROPE_MARKER call site: dispatch per-head cos/sin to q vs k
+        if int(os.environ.get("USE_COPRIME_PER_HEAD_ROPE", "0")) and self.rotary._cos_k_cached is not None and self.rotary.inv_freq.dim() == 2:
+            cos_k = self.rotary._cos_k_cached.to(dtype=q.dtype)
+            sin_k = self.rotary._sin_k_cached.to(dtype=q.dtype)
+        else:
+            cos_k, sin_k = cos, sin
+        q = apply_rotary_emb(q, cos, sin)
+        k = apply_rotary_emb(k, cos_k, sin_k)"""
+    if old_csa_apply in content:
+        content = content.replace(old_csa_apply, new_csa_apply)
+        print("  ✓ patched CSA apply for per-head dispatch")
+
+# Patch 29 (C90 mass-build, world-novel L07 #1): USE_ASYM_LABEL_SMOOTHING=1 → ε=0.01
+# label smoothing applied ONLY to tokens whose unigram log-prob > thresh (frequent
+# tokens). Rare/hard tokens get HARD targets — inverts the standard recipe to
+# preserve gradient signal on the long tail (where BPB is dominated).
+# Source: STACK_NOVELTY_PLAN.md L07 + RESEARCH_BACKLOG.md L07 row 3.
+# Idempotent via ASYM_LABEL_SMOOTHING_MARKER.
+if "ASYM_LABEL_SMOOTHING_MARKER" in content:
+    print("  ✓ asym label smoothing already applied")
+else:
+    old_als_init = """                print("BYTE_WEIGHT: build failed:", _e)
+                self._byte_weight_enabled = False"""
+    new_als_init = """                print("BYTE_WEIGHT: build failed:", _e)
+                self._byte_weight_enabled = False
+        # ASYM_LABEL_SMOOTHING_MARKER: build unigram log-prob LUT for asymmetric smoothing
+        self._als_enabled = bool(int(os.environ.get("USE_ASYM_LABEL_SMOOTHING", "0")))
+        self._als_eps = float(os.environ.get("ASYM_LABEL_SMOOTHING_EPS", "0.01"))
+        self._als_freq_thresh = float(os.environ.get("ASYM_LABEL_SMOOTHING_THRESH", "-3.0"))
+        self.register_buffer("_unigram_logprob_lut", torch.zeros(vocab_size, dtype=torch.float32), persistent=False)
+        if self._als_enabled:
+            try:
+                import numpy as _np
+                _als_suffix = "_tab" if bool(int(os.environ.get("USE_TABULATION_HASH", "0"))) else ""
+                _bg_full = _np.load("./data/bigram_tab_{}v{}.npy".format(vocab_size, _als_suffix))
+                _bg_t = torch.from_numpy(_bg_full).float()
+                _col_max = _bg_t.max(dim=0).values
+                _col_max = _col_max - torch.logsumexp(_col_max, dim=0)
+                self._unigram_logprob_lut = _col_max
+                _frac_freq = float((_col_max > self._als_freq_thresh).float().mean())
+                print("ASYM_LABEL_SMOOTHING: unigram LUT built, frac_freq=", _frac_freq, " eps=", self._als_eps)
+            except Exception as _e:
+                print("ASYM_LABEL_SMOOTHING: LUT build failed:", _e)
+                self._als_enabled = False"""
+    if old_als_init in content:
+        content = content.replace(old_als_init, new_als_init)
+        print("  ✓ added ASYM_LABEL_SMOOTHING init")
+    else:
+        print("  ✗ ASYM_LABEL_SMOOTHING init anchor not found — skipping")
+
+    old_als_apply = """        if self._byte_weight_enabled:
+            _ce = F.cross_entropy(logits.float(), targets, reduction="none")
+            _w = self._byte_weight_lut[targets]
+            return (_ce * _w).sum() / _w.sum()
+        return F.cross_entropy(logits.float(), targets, reduction="mean")"""
+    new_als_apply = """        # ASYM_LABEL_SMOOTHING_MARKER apply: ε-smooth ONLY frequent tokens
+        if getattr(self, '_als_enabled', False):
+            _als_logp = torch.log_softmax(logits.float(), dim=-1)
+            _als_targ_logp = _als_logp.gather(-1, targets.unsqueeze(-1)).squeeze(-1)
+            _als_uni_logp = self._unigram_logprob_lut[targets]
+            _als_freq_mask = (_als_uni_logp > self._als_freq_thresh).to(dtype=_als_logp.dtype)
+            _als_hard = -_als_targ_logp
+            _als_uniform_nll = -_als_logp.mean(dim=-1)
+            _als_smooth = (1.0 - self._als_eps) * _als_hard + self._als_eps * _als_uniform_nll
+            _als_per_tok = _als_freq_mask * _als_smooth + (1.0 - _als_freq_mask) * _als_hard
+            if self._byte_weight_enabled:
+                _w = self._byte_weight_lut[targets]
+                return (_als_per_tok * _w).sum() / _w.sum()
+            return _als_per_tok.mean()
+        if self._byte_weight_enabled:
+            _ce = F.cross_entropy(logits.float(), targets, reduction="none")
+            _w = self._byte_weight_lut[targets]
+            return (_ce * _w).sum() / _w.sum()
+        return F.cross_entropy(logits.float(), targets, reduction="mean")"""
+    if old_als_apply in content:
+        content = content.replace(old_als_apply, new_als_apply)
+        print("  ✓ added ASYM_LABEL_SMOOTHING wrapper")
+    else:
+        print("  ✗ ASYM_LABEL_SMOOTHING apply anchor not found — skipping")
+
+# Patch 30 (C90 mass-build, world-novel L08 #1): USE_PER_PROJ_LR_SPLIT=1 → split
+# Muon param group so q.weight, k.weight, v.weight get DISTINCT learning rates.
+# Q/K/V have very different gradient statistics (Q downstream of QK gain, K twice-
+# normed, V the only one whose grads flow through SDPA softmax directly).
+# Source: STACK_NOVELTY_PLAN.md L08 + RESEARCH_BACKLOG.md L08 row 3.
+# Idempotent via PER_PROJ_LR_SPLIT_MARKER.
+if "PER_PROJ_LR_SPLIT_MARKER" in content:
+    print("  ✓ per-projection LR split already applied")
+else:
+    old_per_proj = """    optimizer_muon = Muon(
+        matrix_params,
+        lr=args.matrix_lr,
+        momentum=args.muon_momentum,
+        backend_steps=args.muon_backend_steps,
+    )
+    for group in optimizer_muon.param_groups:
+        group["base_lr"] = args.matrix_lr"""
+    new_per_proj = """    # PER_PROJ_LR_SPLIT_MARKER: split Muon q/k/v into 3 sub-groups with distinct LRs
+    if int(os.environ.get("USE_PER_PROJ_LR_SPLIT", "0")):
+        _q_mult = float(os.environ.get("Q_LR_MULT", "1.0"))
+        _k_mult = float(os.environ.get("K_LR_MULT", "1.4"))
+        _v_mult = float(os.environ.get("V_LR_MULT", "0.7"))
+        _q_p, _k_p, _v_p, _other_p = [], [], [], []
+        for _name, _p in block_named_params:
+            if _p.ndim != 2 or any(pat in _name for pat in CONTROL_TENSOR_NAME_PATTERNS):
+                continue
+            if ".c_q.weight" in _name:
+                _q_p.append(_p)
+            elif ".c_k.weight" in _name:
+                _k_p.append(_p)
+            elif ".c_v.weight" in _name:
+                _v_p.append(_p)
+            else:
+                _other_p.append(_p)
+        optimizer_muon = Muon(
+            _other_p if _other_p else [next(iter(matrix_params))],
+            lr=args.matrix_lr,
+            momentum=args.muon_momentum,
+            backend_steps=args.muon_backend_steps,
+        )
+        optimizer_muon.param_groups = []
+        optimizer_muon.state = type(optimizer_muon.state)()
+        for _gname, _gparams, _gmult in [
+            ("muon_q", _q_p, _q_mult),
+            ("muon_k", _k_p, _k_mult),
+            ("muon_v", _v_p, _v_mult),
+            ("muon_other", _other_p, 1.0),
+        ]:
+            if not _gparams:
+                continue
+            _grp = {
+                "params": _gparams,
+                "lr": args.matrix_lr * _gmult,
+                "base_lr": args.matrix_lr * _gmult,
+                "momentum": args.muon_momentum,
+                "backend_steps": args.muon_backend_steps,
+                "nesterov": True,
+            }
+            optimizer_muon.add_param_group(_grp)
+        log0(f"PER_PROJ_LR_SPLIT: q={_q_mult} k={_k_mult} v={_v_mult} groups={len(optimizer_muon.param_groups)}")
+    else:
+        optimizer_muon = Muon(
+            matrix_params,
+            lr=args.matrix_lr,
+            momentum=args.muon_momentum,
+            backend_steps=args.muon_backend_steps,
+        )
+        for group in optimizer_muon.param_groups:
+            group["base_lr"] = args.matrix_lr"""
+    if old_per_proj in content:
+        content = content.replace(old_per_proj, new_per_proj)
+        print("  ✓ added PER_PROJ_LR_SPLIT Muon group split")
+    else:
+        print("  ✗ PER_PROJ_LR_SPLIT anchor not found — skipping")
+
+# Patch 31 (C90 mass-build, world-novel L09 #1): USE_CTX_PARTITIONED_TAB=1 → 16
+# virtual sub-tables via slice rotation by (prev mod S) * (HASH/S). Effectively
+# partitions hash buckets into 16 zones, each absorbing 1/16 of contexts → 16x
+# finer-grained smoothing. Mini-paper extension of MINIPAPER_TABULATION_HASH.md.
+# Source: STACK_NOVELTY_PLAN.md L09 + RESEARCH_BACKLOG.md L09 row 3.
+# Idempotent via CTX_PARTITIONED_TAB_MARKER.
+if "CTX_PARTITIONED_TAB_MARKER" in content:
+    print("  ✓ context-partitioned tabulation already applied")
+else:
+    old_cpt_init = """                print("NGRAM_BIAS: fourgram load failed:", _e)
+        # NGRAM_GATE_MARKER: learned per-position gate over n-gram bias"""
+    new_cpt_init = """                print("NGRAM_BIAS: fourgram load failed:", _e)
+        # CTX_PARTITIONED_TAB_MARKER: precompute slice config for partitioned tabulation
+        self._ctx_part_tab_enabled = bool(int(os.environ.get("USE_CTX_PARTITIONED_TAB", "0")))
+        self._ctx_part_slices = int(os.environ.get("CTX_PARTITION_SLICES", "16"))
+        if self._ctx_part_tab_enabled:
+            print("CTX_PARTITIONED_TAB: enabled with", self._ctx_part_slices, "slices")
+        # NGRAM_GATE_MARKER: learned per-position gate over n-gram bias"""
+    if old_cpt_init in content:
+        content = content.replace(old_cpt_init, new_cpt_init)
+        print("  ✓ added CTX_PARTITIONED_TAB init")
+    else:
+        print("  ✗ CTX_PARTITIONED_TAB init anchor not found — skipping")
+
+    old_cpt_bi = """            _bi_bias = self._ngram_w_bigram * self._bigram_tab[_h_bi]
+            if _gate is not None:
+                _bi_bias = _gate * _bi_bias
+            logits = logits + _bi_bias"""
+    new_cpt_bi = """            # CTX_PARTITIONED_TAB_MARKER apply (bigram): slice rotation
+            if getattr(self, '_ctx_part_tab_enabled', False):
+                _S = self._ctx_part_slices
+                _zone = (_ids_flat % _S) * (_H // _S)
+                _h_bi_p = (_h_bi + _zone) % _H
+                _bi_bias = self._ngram_w_bigram * self._bigram_tab[_h_bi_p]
+            else:
+                _bi_bias = self._ngram_w_bigram * self._bigram_tab[_h_bi]
+            if _gate is not None:
+                _bi_bias = _gate * _bi_bias
+            logits = logits + _bi_bias"""
+    if old_cpt_bi in content:
+        content = content.replace(old_cpt_bi, new_cpt_bi)
+        print("  ✓ added CTX_PARTITIONED_TAB bigram slice")
+    else:
+        print("  ✗ CTX_PARTITIONED_TAB bigram anchor not found — skipping")
+
 with open("train_gpt.py", "w") as f:
     f.write(content)
 PYEOF
@@ -1462,8 +1762,11 @@ import sys, pathlib
 src = pathlib.Path("train_gpt.py").read_text()
 expected = [
     "ASYMMETRIC_SKIP_INIT_MARKER",
+    "ASYM_LABEL_SMOOTHING_MARKER",
     "BYTE_WEIGHT_MARKER",
+    "COPRIME_PER_HEAD_ROPE_MARKER",
     "COPRIME_STRIDE_MARKER",
+    "CTX_PARTITIONED_TAB_MARKER",
     "DEPTH_RECUR_MARKER",
     "ENGRAM_LITE_MARKER",
     "ENTROPY_ADAPTIVE_NGRAM_MARKER",
@@ -1480,6 +1783,7 @@ expected = [
     "NS_STEPS_MARKER",
     "PARALLEL_RESIDUALS_MARKER",
     "PARTIAL_ROPE_MARKER",
+    "PER_PROJ_LR_SPLIT_MARKER",
     "PHASE_TRANSITION_MARKER",
     "PROG_SEQ_INIT_MARKER",
     "SKIP_FINAL_EVAL_MARKER",
