@@ -1891,6 +1891,86 @@ else:
     else:
         print("  ✗ EMB_DCT forward anchor not found — skipping")
 
+# Patch 42 (C90 build #13, comp-port L11 #5): USE_KER_TMA_MEGAKERNEL=1 → port the SOTA
+# Triton TMA megakernel for the MLP path. Source: openai/parameter-golf
+# record/tma-megakernel-triple-loop (b27fe93, @andrewbaggio1, val_bpb=1.08480 SOTA).
+# See SOTA_TMA_KERNEL_INTEL.md for the verbatim kernel + autograd Function.
+#
+# The kernel + wrapper + autograd Function lives in runpod_tests/loop/triton_tma_mlp.py
+# (separate file because the @triton.jit decorator needs module-level definition AND
+# the patcher heredoc would break on Triton's f-string syntax). The patcher just adds
+# a SHIM in train_gpt.py that:
+#   1. tries to import the helper module
+#   2. modifies the MLP forward to dispatch to fused_mlp() when env var on + supported
+#   3. falls back to standard path otherwise
+#
+# Composes with LEAKY_RELU (Patch 9) — both gate the same MLP forward; the fused kernel
+# IMPLEMENTS leaky_relu(0.5)^2 internally so when both are on, the kernel takes the path
+# and the leaky_relu Python branch is dead code (no double-application). When fused kernel
+# is OFF or unsupported, the LEAKY_RELU Python branch runs as usual.
+#
+# Hopper-only: cheap pods (3090, 4070 Ti) have no TMA descriptor support → import fails
+# → HAS_TRITON_TMA=False → fused_mlp is_supported() returns False → fall back to standard
+# path → bit-exact with baseline. Validation must wait for the H100 production run.
+#
+# Win mechanism on H100: +10.5% throughput → +127 steps in 600s → -0.02 to -0.03 BPB.
+#
+# Idempotent via KER_TMA_MEGAKERNEL_MARKER. Two anchors:
+#   A) module-level: insert the import shim near other imports
+#   B) MLP forward (post-Patch-9): add the fused dispatch BEFORE the leaky/relu branch
+if "KER_TMA_MEGAKERNEL_MARKER" in content:
+    pass
+else:
+    # Anchor A: insert lazy import shim near the existing CastedLinear import area
+    # (using the import line for `from torch import Tensor` as a stable anchor that
+    # appears once and is invariant under all 41 prior patches).
+    old_import_anchor = "from torch import Tensor"
+    new_import_anchor = """from torch import Tensor
+# KER_TMA_MEGAKERNEL_MARKER: lazy import the Triton TMA megakernel helper.
+# Falls through to standard path on cheap pods (3090, 4070 Ti) where TMA is unavailable.
+try:
+    import sys as _sys_ker_tma
+    _sys_ker_tma.path.insert(0, 'runpod_tests/loop')
+    import triton_tma_mlp as _ker_tma_mlp
+    _KER_TMA_MLP_AVAILABLE = True
+except Exception as _e_ker_tma:
+    _KER_TMA_MLP_AVAILABLE = False"""
+    if old_import_anchor in content:
+        content = content.replace(old_import_anchor, new_import_anchor, 1)
+        # Anchor B: modify MLP forward (post-Patch-9 leaky version) to dispatch to fused kernel
+        old_mlp_fwd = """    def forward(self, x: Tensor) -> Tensor:
+        # LEAKY_RELU_MARKER: optional leaky_relu(0.5)^2 activation (Mac -0.014 BPB)
+        if int(os.environ.get('USE_LEAKY_RELU', '0')):
+            x = F.leaky_relu(self.fc(x), negative_slope=0.5)
+        else:
+            x = torch.relu(self.fc(x))
+        return self.proj(x.square())"""
+        new_mlp_fwd = """    def forward(self, x: Tensor) -> Tensor:
+        # KER_TMA_MEGAKERNEL_MARKER apply: dispatch to fused TMA kernel when supported.
+        if (int(os.environ.get('USE_KER_TMA_MEGAKERNEL', '0'))
+            and _KER_TMA_MLP_AVAILABLE
+            and self.training
+            and _ker_tma_mlp.is_supported(x)):
+            try:
+                return _ker_tma_mlp.fused_mlp(x, self.fc.weight, self.proj.weight)
+            except Exception as _e_fused_mlp:
+                if int(os.environ.get('TMA_VERBOSE', '0')):
+                    print(f"KER_TMA_MEGAKERNEL: fused path failed, falling back: {_e_fused_mlp}")
+                # fall through to standard path
+        # LEAKY_RELU_MARKER: optional leaky_relu(0.5)^2 activation (Mac -0.014 BPB)
+        if int(os.environ.get('USE_LEAKY_RELU', '0')):
+            x = F.leaky_relu(self.fc(x), negative_slope=0.5)
+        else:
+            x = torch.relu(self.fc(x))
+        return self.proj(x.square())"""
+        if old_mlp_fwd in content:
+            content = content.replace(old_mlp_fwd, new_mlp_fwd, 1)
+            print("  ✓ added KER_TMA_MEGAKERNEL_MARKER (Hopper-only TMA fused MLP, falls back on cheap pods)")
+        else:
+            print("  ✗ KER_TMA_MEGAKERNEL MLP forward anchor not found — import shim added but not wired")
+    else:
+        print("  ✗ KER_TMA_MEGAKERNEL import anchor not found — skipping")
+
 # Patch 41 (C90 build #12, world-novel L11 #4): USE_DYN_LYAPUNOV_CLIP=1 → adaptive
 # gradient clipping driven by an estimate of the dominant Lyapunov exponent of the
 # training dynamics. Maintain a rolling 20-step grad_norm history; estimate
@@ -2419,6 +2499,7 @@ expected = [
     "ENGRAM_LITE_MARKER",
     "ENTROPY_ADAPTIVE_NGRAM_MARKER",
     "GATED_ATTENTION_MARKER",
+    "KER_TMA_MEGAKERNEL_MARKER",
     "LEAKY_RELU_MARKER",
     "LN_SCALE_MARKER",
     "MOUSSE_MARKER",
