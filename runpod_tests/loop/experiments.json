@@ -1,5 +1,41 @@
 [
   {
+    "name": "L09_lfinv_seed42",
+    "pod_filter": [
+      "C"
+    ],
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "900",
+    "USE_NGR_LOG_FREQ_INV": "1",
+    "SEED": "42"
+  },
+  {
+    "name": "L09_lfinv_seed1337",
+    "pod_filter": [
+      "C"
+    ],
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "900",
+    "USE_NGR_LOG_FREQ_INV": "1",
+    "SEED": "1337"
+  },
+  {
     "USE_LEAKY_RELU": "1",
     "USE_NGRAM_BIAS": "1",
     "USE_COPRIME_STRIDE": "1",
