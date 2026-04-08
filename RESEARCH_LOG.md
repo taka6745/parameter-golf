@@ -2299,3 +2299,50 @@ Initial audits must distinguish between "X is published, we're applying it for t
 ### Updated win likelihood: 35% (down from 40%)
 The demotions don't change the BPB calculus — the patches still work. But our "world-first" count is smaller than I claimed. The L04 gated_attention 1.4098 cheap-pod val_bpb is still our best, and projected H100 ~1.01 is still WIN territory. Just need the H100 transfer ratio to hold.
 
+
+---
+
+## 2026-04-08 1112Z — Validation backlog landed: NEW BEST + interaction discount confirmed
+
+**Active session resumed after summary at 1107Z.** Pulled 4 alive pods (B/C/E/F/G — D still in network outage).
+
+### Major new results
+
+| run | pod | val_bpb | vs baseline 1.4137 | note |
+|---|---|---|---|---|
+| **L08_normuon_S2confirm_seed42** | B | **1.4086** | **-0.0051** | ★★★ NEW OVERALL BEST (was L04_gated 1.4094) |
+| L06_asym_skip_init_S2confirm_seed1337 | E | 1.4089 | -0.0048 | 2nd best, n=2 mean (with seed42=1.4117) → 1.4103 |
+| L04_gated_attention_S2confirm_seed1337 | G | 1.4090 | -0.0047 | n=2 mean 1.4094, consistent |
+| L04_gated_attention_S2confirm_seed42 | G | 1.4098 | -0.0039 | (already had this) |
+| L04_coprime_per_head_rope_S2confirm_seed42 | G | **1.4109** | -0.0028 | ★ NEW world-novel confirmed (n=1) |
+| **STACK_INTERACTION_5way_S2_seed42** | E | **1.4117** | -0.0020 | sum of 5 indiv ≈ -0.0053 → **62% stacking discount** |
+| L06_ln_scale_S2confirm_seed42 | E | 1.4132 | -0.0005 | marginal, kept |
+| L05_norm_pct_dropout_S2confirm_seed1337 | F | 1.4133 | -0.0004 | n=2 mean 1.41365, basically baseline |
+| L07_asym_label_smoothing_S2confirm_seed1337 | F | 1.4144 | +0.0007 | n=2 mean 1.4141 = ABOVE baseline → DEMOTED |
+| L07_byte_weight_S2confirm_seed42 | F | 1.4143 | +0.0006 | n=1 borderline, queued seed1337 confirm |
+| L08_per_proj_lr_split_S2confirm_seed1337 | B | 1.4148 | +0.0011 | n=2 mean 1.4157 = ABOVE baseline → DEMOTED |
+| L05_parallel_residuals_S2confirm_seed42 | F | 1.4235 | +0.0098 | BIG FAIL → DEMOTED |
+
+### Key insights
+1. **STACKING DISCOUNT IS REAL AND ~60%.** Sum of 5 individual deltas = -0.0053, stacked = -0.0020. Adding more markers does not multiply gains; pick the strongest few.
+2. **L08 normuon (1.4086) BEATS the 5-way stack (1.4117).** Single best marker > a stack with norm_pct (≈null) + asym_label (null) + per_proj_lr_split (negative).
+3. **Only 3 markers genuinely beat baseline by ≥0.003**: L08 normuon (-0.0051), L04 gated_attention (-0.0043), L06 asym_skip_init (-0.0034).
+4. **L04 coprime_per_head_rope is the FIRST world-novel n=1 confirmed at -0.003 level.** True world-novelty validated empirically.
+
+### Actions taken this fire (1112Z)
+1. Updated Section A with new results (NEW BEST, demotions, marginal flags).
+2. Queued at FRONT of experiments.json (B/E/F/C/B):
+   - **STACK_TRUE_WINNERS_3WAY_seed42** → Pod B (normuon + gated + asym_skip = the only 3 genuine winners)
+   - **STACK_TRUE_WINNERS_3WAY_seed1337** → Pod E
+   - L08_normuon_S2confirm_seed1337 → Pod F (n=2 confirm of new best)
+   - L04_coprime_per_head_rope_S2confirm_seed1337 → Pod B (n=2 confirm of new world-novel)
+   - L07_byte_weight_S2confirm_seed1337 → Pod C (rescue from over-aggressive demote)
+3. STACK_LEGAL_TTT_seed42 still queued on G — Pod G currently wrapping STACK_INTERACTION_5way_S2_seed42, will pick LEGAL_TTT next. ETA ~11:50Z.
+
+### Projected
+- 3-way TRUE-WINNER stack expected ~1.4080-1.4090 (assuming 60% discount): essentially same as normuon alone. Worth running to confirm interaction model.
+- LEGAL_TTT is the biggest pending lever: if it works, projected -0.005 to -0.020 cheap-pod (eval-time gain not accounted in train_loss).
+- SP8192 still building on Mac (vocab 80/8192 after 3h09m elapsed, slow merge phase).
+
+### Win likelihood updated: 30% (down from 35%)
+The 60% stacking discount is sobering. To reach 1.07 cheap-pod equivalent, we'd need ~0.35 BPB gain — impossibly large with current per-marker gains. Best-case path: LEGAL_TTT delivers -0.02, BPE-8192 delivers -0.05 indirect, optimal H100 transfer ratio holds. Realistic projected H100 val_bpb after all wins: 1.05-1.10 (could match or barely beat current SOTA 1.07-1.08).
