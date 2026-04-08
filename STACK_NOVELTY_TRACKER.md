@@ -27,8 +27,9 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 | L09_ngram | 1 | L09_entropy_adaptive | no | screened-pass | -0.32 (2.5201 @ step 1300) |  | C | 20260408T0257Z |
 | L06_norm | 1 | L06_ln_scale | no | **n=3 PROMOTION-READY** | -0.54 mean (seeds 42/1337/999 = 2.4622/2.2217/2.2204, mean=2.30143) |  | E | 20260408T0345Z |
 | L05_ffn | 1 | L05_parallel_residuals | no | n=2 PROMOTION-READY | mean=2.24015 (seed42=2.2387, seed1337=2.2416) |  | G | 20260408T0457Z |
-| L05_ffn | 2 | L05_norm_pct_dropout | **yes (world-novel)** | **screened-pass — BEATS COMP-PORT** | -0.018 vs L05_parallel_residuals (norm_pct_dropout seed1337=2.2224 < parallel_residuals mean=2.24015); awaiting seed42 |  | F | 20260408T0457Z |
+| L05_ffn | 2 | L05_norm_pct_dropout | **yes (world-novel)** | **n=2 PROMOTION-READY — BEATS COMP-PORT** | -0.012 vs L05_parallel_residuals (n=2 mean=2.22795: seed42=2.2335, seed1337=2.2224 < parallel_residuals mean=2.24015) |  | F | 20260408T0545Z |
 | L06_norm | 2 | L06_asymmetric_skip_init | **yes (world-novel)** | n=2 PROMOTION-READY | mean=2.2276 (seed42=2.2313, seed1337=2.2239); essentially equivalent to L06_ln_scale (2.2217 best single) |  | E | 20260408T0457Z |
+| L07_loss | 3 | L07_asym_label_smoothing | **yes (world-novel)** | **n=2 PROMOTION-READY — FIRST L07 WORLD-NOVEL** | mean=2.22885 (seed42=2.2283, seed1337=2.2294); -0.135 vs byte_weight mean=2.3645 |  | F | 20260408T0545Z |
 
 <!-- rows added at runtime; status ∈ pending|in-flight|screened-pass|screened-fail|confirmed-win|confirmed-fail|demoted -->
 <!-- world_novel ∈ yes|no|auditing -->
@@ -207,6 +208,54 @@ verdict: world-novel
 verdict_reason: paper arXiv:2503.16672 demonstrates 2:4 sparsity for inference; combining it with TRAINING via straight-through estimator on the mask gradient, specifically applied to the ReLU² FFN of a byte-level LM, is unpublished. ReLU² already produces many zeros so the 2:4 mask is "free" sparsity.
 phd_defensible: yes — clear theory (intrinsic ReLU² sparsity matches 2:4 hardware pattern), clear ablation (mask on/off vs throughput), workshop paper on "exploiting activation function statistics for hardware-aware training"
 owner: F
+
+### NRM_adaptive_resid_gating
+added_utc: 20260408T0545Z
+source: C30#5 — Qwen NeurIPS 2025 Gated Attention (arXiv:2505.06708) + control theory (Peri-LN stability) + byte-LM cross-domain synthesis
+verdict: world-novel
+verdict_reason: Qwen Gated Attention applies gates POST-SDPA only (attention output). Extending to per-layer residual gates on BOTH attn AND MLP paths, modulated by running activation norm, is not in literature or comp PRs. Byte-LMs are especially prone to activation blowup → control-theory motivation is clean.
+phd_defensible: yes — clear hypothesis (gates reduce massive activations), clear ablation (gate on/off vs throughput vs final BPB), workshop paper feasible
+owner: E
+
+### NRM_layer_adaptive_rnorm_schedule
+added_utc: 20260408T0545Z
+source: C30#5 — Bolmo (arXiv:2512.15586) adaptive byte pooling + UN-η adaptive normalization (2025)
+verdict: world-novel
+verdict_reason: RMSNorm has no learnable γ/β; learning a per-layer multiplicative temperature α(ℓ) over training is distinct from LN learnable affine and from fixed 1/√(ℓ+1). 9 floats, zero overhead, but adapts data-driven to emergent layer feature magnitude. No prior on this for byte-LMs.
+phd_defensible: yes — Bolmo precedent for learned adaptation in byte-LMs, clear ablation against fixed-formula baseline, workshop-feasible
+owner: E
+
+### NRM_skip_gate_with_entropy_modulation
+added_utc: 20260408T0545Z
+source: C30#5 — UN-η adaptive outlier filtration + Bolmo entropy + extension of shipped ASYMMETRIC_SKIP_INIT
+verdict: world-novel
+verdict_reason: ASYMMETRIC_SKIP_INIT (shipped) fixes skip at 0.5. Extending to a learnable sigmoid gate driven by per-layer activation entropy is novel. No prior on entropy-modulated skip connections in transformer byte-LMs.
+phd_defensible: yes — clear extension story, gate-stat ablation is clean, workshop-feasible
+owner: E
+
+### OPT_chebyshev_optimized_newton_schulz
+added_utc: 20260408T0545Z
+source: C30#5 — arXiv:2506.10935 Chebyshev-optimized NS (May 2025) + custom Muon adaptation
+verdict: world-novel
+verdict_reason: Chebyshev acceleration of Newton-Schulz is published in numerical analysis but never adapted to Muon. Muon ships NS=5 universally; replacing with 3 Chebyshev-optimized steps is a hyperparameter discovery. Cross-domain (numerical analysis → deep learning optimizer).
+phd_defensible: yes — clear theory (Chebyshev minimax), clear ablation (NS=5 vs Cheb=3 vs Cheb=4), workshop-paper on "Chebyshev-accelerated Muon for byte-LMs"
+owner: B
+
+### OPT_riemannian_gram_projection_qkv
+added_utc: 20260408T0545Z
+source: C30#5 — arXiv:2508.17901 Riemannian Stiefel optimization + Muon synthesis
+verdict: world-novel
+verdict_reason: Riemannian Gram-Schmidt is published. Applying it ONLY to Q/K/V (sublayer-aware Stiefel constraint) within Muon is novel. Selective manifold geometry per parameter type is not in any Muon paper or comp PR.
+phd_defensible: yes — clean Stiefel theory, ablation (Q-only / K-only / V-only / all-three), workshop-feasible
+owner: B
+
+### OPT_schedule_free_momentum_adaptation
+added_utc: 20260408T0545Z
+source: C30#5 — Yemets et al. Apr 2025 schedule-free + Muon adaptation
+verdict: world-novel
+verdict_reason: schedule-free is published for AdamW/SGD. No Muon variant uses online EMA-derived momentum schedules. Removes hyperparameter lock-in on momentum=0.95.
+phd_defensible: yes — clear theory (schedule-free guarantees), clear ablation, workshop-feasible
+owner: B
 
 ### NGR_counting_bloom_high_freq_suppress
 added_utc: 20260408T0245Z

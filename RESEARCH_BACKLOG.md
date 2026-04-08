@@ -92,6 +92,9 @@ Schema for every row:
 | 1 | NRM_ln_scale_validate | Patch (in 1.1147 stack) | USE_LN_SCALE=1 — RMSNorm output × 1/√(layer+1) | -0.003 train_loss | comp-novel | 0 (env var) | 20260408T0000Z |
 | 2 | NRM_per_layer_residual_scalar | ReZero variant | per-layer learned residual scalar (init 1.0, ≤9 floats) | -0.004 train_loss | comp-novel | 20 | 20260408T0000Z |
 | 3 | NRM_asymmetric_skip_init_half | Plan-A novel | self.skip_weights at line 673 defaults to ones; init at 0.5 instead → explicit info bottleneck | -0.006 train_loss | world-novel-candidate **SHIPPED 0419Z** as ASYMMETRIC_SKIP_INIT_MARKER | 5 | 20260408T0000Z |
+| 4 | NRM_adaptive_resid_gating | C30#5 — Qwen NeurIPS 2025 Gated Attention (arXiv:2505.06708) + control theory (Peri-LN) + byte-LM cross-domain synthesis | per-layer sigmoid gates on residual output (both attn & MLP), modulated by running norm of layer activations; reduces "massive activation" observed deep at byte scale | -0.008 to -0.015 train_loss | **world-novel-candidate** | 50 | 20260408T0545Z |
+| 5 | NRM_layer_adaptive_rnorm_schedule | C30#5 — Bolmo (2512.15586) adaptive byte pooling + UN-η adaptive normalization | learn per-layer RMSNorm temperature α(ℓ) ∈ [0.5, 2.0] (init 1.0); optimizer adjusts per-layer instead of fixed 1/√(ℓ+1) | -0.004 to -0.012 train_loss | **world-novel-candidate** | 15 | 20260408T0545Z |
+| 6 | NRM_skip_gate_with_entropy_modulation | C30#5 — UN-η + Bolmo entropy + extension of shipped ASYMMETRIC_SKIP_INIT | expand skip_weights into gated path: skip_out = sigmoid(gate_param(ℓ)) * skip_weights[ℓ] * x0; entropy-adaptive modulation | -0.006 to -0.014 train_loss | **world-novel-candidate** | 40 | 20260408T0545Z |
 
 ---
 
@@ -111,7 +114,10 @@ Schema for every row:
 |---|---|---|---|---|---|---|---|
 | 1 | OPT_normuon_validate | Patch 25 (Mac claims -0.132 BPB) | USE_NORMUON=1 per-row norm post-NS | -0.01 train_loss | comp-novel | 0 (env var) | 20260408T0000Z |
 | 2 | OPT_muoneq_r_validate | Patch 18 | USE_MUONEQ_R=1 row-only norm post-NS | -0.005 train_loss | comp-novel | 0 (env var) | 20260408T0000Z |
-| 3 | OPT_per_projection_lr_split | Plan-A novel | split Muon param group so q.weight, k.weight, v.weight get different LRs (currently they share) | -0.005 train_loss | world-novel-candidate | 60 (param group split) | 20260408T0000Z |
+| 3 | OPT_per_projection_lr_split | Plan-A novel | split Muon param group so q.weight, k.weight, v.weight get different LRs (currently they share) | -0.005 train_loss | world-novel-candidate **SHIPPED 0445Z** as PER_PROJ_LR_SPLIT_MARKER | 60 | 20260408T0000Z |
+| 4 | OPT_chebyshev_optimized_newton_schulz | C30#5 — arXiv:2506.10935 Chebyshev NS (May 2025) + custom Muon adaptation | replace Muon's 5-step NS with 3 Chebyshev-optimized steps (optimal alternance coefficients); fewer matmuls per step → faster Muon | -0.003 to -0.007 train_loss + 1.5× Muon speedup | **world-novel-candidate** | 45 | 20260408T0545Z |
+| 5 | OPT_riemannian_gram_projection_qkv | C30#5 — arXiv:2508.17901 Riemannian Stiefel optimization + custom synthesis | apply Riemannian Gram-Schmidt projection ONLY to Q/K/V matrices before NS orthogonalization; sublayer-aware Stiefel constraint reduces attention parameter redundancy | -0.004 to -0.008 train_loss | **world-novel-candidate** | 60 | 20260408T0545Z |
+| 6 | OPT_schedule_free_momentum_adaptation | C30#5 — Yemets et al. Apr 2025 + Muon adaptation | replace fixed momentum 0.95 with schedule-free interpolation: momentum(t) = 1 - α·exp(-β·t), α/β learned via per-group EMA; removes hyperparameter lock-in | -0.005 to -0.010 train_loss | **world-novel-candidate** | 50 | 20260408T0545Z |
 
 ---
 
