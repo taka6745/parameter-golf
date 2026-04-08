@@ -50,6 +50,24 @@ A shot **bears fruit** if it lands n=2 cheap-pod val_bpb **≤ 1.3666** (Δ ≥ 
 
 ---
 
+## ★ AUTHORITATIVE pod-shot assignment (live, updated 1342Z)
+
+**RULE: each pod has UNIQUE work. No two pods on similar tests. Strict pod_filter enforcement.**
+
+| Pod | Role | Currently in flight | Next shot | Reason / hypothesis |
+|---|---|---|---|---|
+| **B = ARCH** | architecture | (chewing existing queue) | ARCH_11L_3X_MLP refactor (manual write) | Match merged SOTA shape (10L→11L, 2× MLP→3×) |
+| **C = NGRAM** | n-gram engine | NGRAM_BACKOFF n=2 confirmed; NGR_MODIFIED_KN seed42/1337 queued (Patch 50) | After KN: NGR_neural_engram_hash_cache | proper Chen-Goodman 1998 KN smoothing (never tested in 173 NGRAM PRs) |
+| **E = EMB** | embeddings | L02_mdl_compressible_first n=1=1.4093 ★ landed; seed1337 queued | After: EMB_polyphase_token_phase_routing | audio-codec polyphase routing (Bellanger 1983, world-novel) |
+| **F = LOSS** | loss | L07_hellinger_bregman seed42/1337 queued (Patch 49) | After: LSS_token_uncertainty_aux | Bregman family symmetric divergence (Beyond KL arXiv:2602.04380) |
+| **G = ATTN** | attention | gated+LEGAL_TTT champion 1.3716; STACK_TRUE_WINNERS+TTT in flight | After: ATT_differential_attention | Microsoft ICLR 2025 differential transformer for byte-LM |
+| **H = COMP** (NEW) | compression | L10_cmp_quant_dedup seed42/1337 just queued | After: CMP_context_adaptive_rANS (PhD swing) | World-novel rANS w/ per-layer learned prior |
+| **I = INFRA** (NEW) | infra/speed | L11_dyn_lyapunov_clip seed42/1337 just queued | After: KER_cudagraph_persistent | DYN_LYAPUNOV (screened-pass) needs S2; cudagraph fusion next |
+| **J = STRETCH/FIREHOSE** (NEW) | TOKEN FIRE-HOSE 5B tokens experiment | (re-bootstrapping with 50 shards) | TOKEN_FIREHOSE_3way seed42/1337 queued | DEDICATED data-diversity test: 5B local tokens vs 1B baseline. Tests "does diversity beat repeats" hypothesis. Real H100 win = 4B unique > 1B × 4 repeats. |
+| **Mac** | offline design | SP8192 build (still slow, 8h elapsed) | Custom CUDA kernel design (deferred validation) | Cannot validate on Mac directly |
+
+**TOTAL: 9 surfaces, each with unique work, no overlap.**
+
 ## Pod specialization (8 pods after expansion)
 
 | Pod | Role | Round 1 shot | Backup R2 | Backup R3 |

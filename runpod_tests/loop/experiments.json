@@ -11,6 +11,124 @@
     "NGRAM_W_FOURGRAM": "0.20",
     "MAX_WALLCLOCK_SECONDS": "1500",
     "SKIP_FINAL_EVAL": "0",
+    "name": "TOKEN_FIREHOSE_3way_seed42",
+    "pod_filter": [
+      "J"
+    ],
+    "USE_NORMUON": "1",
+    "USE_GATED_ATTENTION": "1",
+    "USE_ASYMMETRIC_SKIP_INIT": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "TOKEN_FIREHOSE_3way_seed1337",
+    "pod_filter": [
+      "J"
+    ],
+    "USE_NORMUON": "1",
+    "USE_GATED_ATTENTION": "1",
+    "USE_ASYMMETRIC_SKIP_INIT": "1",
+    "SEED": "1337"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L10_cmp_quant_dedup_S2_seed42",
+    "pod_filter": [
+      "H"
+    ],
+    "USE_CMP_QUANT_VALUE_DEDUP": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L10_cmp_quant_dedup_S2_seed1337",
+    "pod_filter": [
+      "H"
+    ],
+    "USE_CMP_QUANT_VALUE_DEDUP": "1",
+    "SEED": "1337"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L11_dyn_lyapunov_clip_S2_seed42",
+    "pod_filter": [
+      "I"
+    ],
+    "USE_DYN_LYAPUNOV_CLIP": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L11_dyn_lyapunov_clip_S2_seed1337",
+    "pod_filter": [
+      "I"
+    ],
+    "USE_DYN_LYAPUNOV_CLIP": "1",
+    "SEED": "1337"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
     "name": "L07_hellinger_bregman_S2_seed42",
     "pod_filter": [
       "F"
