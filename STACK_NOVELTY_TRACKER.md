@@ -54,6 +54,7 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 | L06_norm | 4 | L06_ln_scale | no (comp-port) | borderline confirmed-win | S2 seed42=**1.4132** ≈ baseline -0.0005 (marginal) | -0.0005 (cheap E n=1) | E | 20260408T1112Z |
 | L08_optimizer | 4 | L08_opt_chebyshev_ns | no (DEMOTED to comp-port C180 0915Z — arXiv:2506.10935) | screened-pass (S1) | seed42 train_loss=2.229 (1400 steps, NS=3 Chebyshev), need seed1337 + S2 |  | B | 20260408T0945Z |
 | L11_infra | 1 | L11_dyn_lyapunov_clip | **yes (world-novel, verified C180)** | screened-pass (S1) | seed42 train_loss=2.233 (1400 steps, λ₁ adaptive grad clip) — patch works end-to-end |  | B | 20260408T0945Z |
+| L11_infra | 3 | L11_dyn_lyapunov_clip_S2 | **yes (world-novel)** | **n=1 NEUTRAL — borderline** | S2 seed42 tl=2.308 → val_bpb=**1.4136** vs baseline 1.4137 = -0.0001 (within seed noise σ~0.001); seed1337 in flight | -0.0001 (cheap I n=1) | I | 20260408T1527Z |
 | L11_infra | 2 | L11_ker_tma_megakernel | no (comp-port from SOTA b27fe93) | screened-pass-fallback | seed42 train_loss=2.2335 (1400 steps, fallback path on 3090; H100 path untested) |  | B | 20260408T0945Z |
 | L09_ngram | 2 | L09_entropy_adaptive | no (comp port) | n=5 PROMOTION-READY | seeds 42/1337/7/13/999 = 2.5201/2.2600/2.2579/2.2543/2.2546; mean(excl.42)=2.2567 |  | C | 20260408T0945Z |
 | L06_norm | 2 | L06_asymmetric_skip_init | **yes (world-novel)** | n=2 PROMOTION-READY | mean=2.2276 (seed42=2.2313, seed1337=2.2239); essentially equivalent to L06_ln_scale (2.2217 best single) |  | E | 20260408T0457Z |
