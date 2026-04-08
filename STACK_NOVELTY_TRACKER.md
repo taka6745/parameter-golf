@@ -32,7 +32,10 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 | L06_norm | 3 | L06_asymmetric_skip_init | **yes (world-novel)** | **confirmed-win** (S2 cheap-pod) | n=2 mean=2.2276 (S1) → S2 train_loss=2.3172 → val_bpb=1.4117 | **1.4117** (cheap E) | E | 20260408T0905Z |
 | L07_loss | 4 | L07_asym_label_smoothing | **yes (world-novel)** | **confirmed-win** (S2 cheap-pod) | n=2 mean=2.22885 (S1) → S2 train_loss=2.3068 → val_bpb=1.4138 | **1.4138** (cheap F) | F | 20260408T0905Z |
 | L08_optimizer | 3 | L08_per_proj_lr_split | **yes (world-novel)** | **confirmed-win** (S2 cheap-pod) | n=2 (S1) → S2 train_loss=2.3088 → val_bpb=1.4166 | **1.4166** (cheap B) | B | 20260408T0905Z |
-| L08_optimizer | 4 | L08_opt_chebyshev_ns | **yes (world-novel)** | screened-pass (S1) | seed42 train_loss=2.229 (1400 steps, NS=3 Chebyshev), need seed1337 + S2 |  | B | 20260408T0905Z |
+| L08_optimizer | 4 | L08_opt_chebyshev_ns | no (DEMOTED to comp-port C180 0915Z — arXiv:2506.10935) | screened-pass (S1) | seed42 train_loss=2.229 (1400 steps, NS=3 Chebyshev), need seed1337 + S2 |  | B | 20260408T0945Z |
+| L11_infra | 1 | L11_dyn_lyapunov_clip | **yes (world-novel, verified C180)** | screened-pass (S1) | seed42 train_loss=2.233 (1400 steps, λ₁ adaptive grad clip) — patch works end-to-end |  | B | 20260408T0945Z |
+| L11_infra | 2 | L11_ker_tma_megakernel | no (comp-port from SOTA b27fe93) | screened-pass-fallback | seed42 train_loss=2.2335 (1400 steps, fallback path on 3090; H100 path untested) |  | B | 20260408T0945Z |
+| L09_ngram | 2 | L09_entropy_adaptive | no (comp port) | n=5 PROMOTION-READY | seeds 42/1337/7/13/999 = 2.5201/2.2600/2.2579/2.2543/2.2546; mean(excl.42)=2.2567 |  | C | 20260408T0945Z |
 | L06_norm | 2 | L06_asymmetric_skip_init | **yes (world-novel)** | n=2 PROMOTION-READY | mean=2.2276 (seed42=2.2313, seed1337=2.2239); essentially equivalent to L06_ln_scale (2.2217 best single) |  | E | 20260408T0457Z |
 | L07_loss | 3 | L07_asym_label_smoothing | **yes (world-novel)** | **n=2 PROMOTION-READY — FIRST L07 WORLD-NOVEL** | mean=2.22885 (seed42=2.2283, seed1337=2.2294); -0.135 vs byte_weight mean=2.3645 |  | F | 20260408T0545Z |
 
