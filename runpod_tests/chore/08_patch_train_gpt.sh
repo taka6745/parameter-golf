@@ -1891,6 +1891,56 @@ else:
     else:
         print("  ✗ EMB_DCT forward anchor not found — skipping")
 
+# Patch 34 (C90 mass-build #3, world-novel L10 #1): USE_CMP_HESSIAN_BIT_BUDGET=1
+# → make int8 quantization clip-quantile per-tensor based on a Hessian proxy ||W||².
+# High-importance tensors (top quantile of mean-square magnitude) get a TIGHT clip
+# (q=0.9995) → preserves dynamic range. Low-importance tensors get a LOOSE clip
+# (q=0.992) → more weights snap to ±127 / 0 → longer runs → BETTER zlib compression
+# of the same int8 payload. The CHBB helper holds a per-process running sensitivity
+# buffer; rank within the buffer drives the clip choice. Default OFF keeps the
+# existing fixed INT8_CLIP_Q path bit-exact.
+# World-novel: literature uses Hessian for which BITS to spend (mixed precision),
+# never for which CLIP QUANTILE to use to optimize downstream entropy coding.
+# Source: STACK_NOVELTY_PLAN.md L10 + RESEARCH_BACKLOG.md L10 (CMP novel synthesis).
+# Idempotent via CMP_HESSIAN_BIT_BUDGET_MARKER.
+if "CMP_HESSIAN_BIT_BUDGET_MARKER" in content:
+    pass
+else:
+    chbb_helper = """
+# CMP_HESSIAN_BIT_BUDGET_MARKER — world-novel L10 patch
+_CHBB_BUF: list = []
+def _chbb_clip_q(t: Tensor) -> float:
+    import os as _o_chbb
+    if _o_chbb.environ.get('USE_CMP_HESSIAN_BIT_BUDGET', '0') != '1':
+        return INT8_CLIP_Q
+    if not torch.is_tensor(t) or t.numel() == 0:
+        return INT8_CLIP_Q
+    s = float((t.float() * t.float()).mean().item())
+    _CHBB_BUF.append(s)
+    sb = sorted(_CHBB_BUF)
+    rank = sb.index(s) / max(len(sb) - 1, 1)
+    # tight quantile for high-sensitivity, loose for low → better zlib runs
+    return 0.992 + (0.9995 - 0.992) * rank
+
+def quantize_float_tensor(t: Tensor) -> tuple[Tensor, Tensor]:"""
+    old_def = "def quantize_float_tensor(t: Tensor) -> tuple[Tensor, Tensor]:"
+    if old_def in content:
+        content = content.replace(old_def, chbb_helper, 1)
+        # Wire the dynamic clip quantile into the two existing INT8_CLIP_Q usages
+        content = content.replace(
+            "torch.quantile(t32.abs(), INT8_CLIP_Q, dim=1)",
+            "torch.quantile(t32.abs(), _chbb_clip_q(t32), dim=1)",
+            1,
+        )
+        content = content.replace(
+            "torch.quantile(t32.abs().flatten(), INT8_CLIP_Q).item()",
+            "torch.quantile(t32.abs().flatten(), _chbb_clip_q(t32)).item()",
+            1,
+        )
+        print("  ✓ added CMP_HESSIAN_BIT_BUDGET_MARKER (per-tensor Hessian-proxy clip)")
+    else:
+        print("  ✗ CMP_HESSIAN_BIT_BUDGET anchor not found — skipping")
+
 with open("train_gpt.py", "w") as f:
     f.write(content)
 PYEOF
@@ -1911,6 +1961,7 @@ expected = [
     "ASYMMETRIC_SKIP_INIT_MARKER",
     "ASYM_LABEL_SMOOTHING_MARKER",
     "BYTE_WEIGHT_MARKER",
+    "CMP_HESSIAN_BIT_BUDGET_MARKER",
     "COPRIME_PER_HEAD_ROPE_MARKER",
     "COPRIME_STRIDE_MARKER",
     "CTX_PARTITIONED_TAB_MARKER",

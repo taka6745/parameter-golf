@@ -149,6 +149,7 @@ Schema for every row:
 | 9 | CMP_vq_learned_codebook_multilayer | C30#4 — ERVQ arXiv:2410.12359 + ICCV 2025 PQ | apply Residual Vector Quantization with learned k-means codebooks per layer (e.g., 8-bit primary + 4-bit residual); entropy-code indices via rANS afterwards | -0.008 to -0.015 BPB (1.5-2.5 MB freed) | **world-novel-candidate** | 180 | 20260408T0426Z |
 | 10 | CMP_asymmetric_numeric_systems_neural_prior | C30#4 — rANS + arXiv:2511.04684 RAS + custom hybrid | learn a tiny ~2KB neural network that predicts the rANS prior distribution conditioned on (layer_id, position, quantized_value); dynamic context-aware compression instead of static Gaussian | -0.006 to -0.012 BPB | **world-novel-candidate** | 150 | 20260408T0426Z |
 | 11 | CMP_tensor_train_int4_cores_mixed_precision | C30#4 — PicoGPT memo §16 + TT (MPO) literature | decompose large weight matrices into Tensor Train format with rank-16 cores; store cores in mixed int4/int5 (attn int5, MLP int4); fused contraction kernel at inference time, no full retraining | -0.010 to -0.018 BPB (2.0-3.5 MB freed) | **world-novel-candidate** | 220 | 20260408T0426Z |
+| 12 | CMP_hessian_bit_budget | C90#3 0620Z novel synthesis (Hessian-proxy clip quantile + zlib redundancy) | per-tensor INT8_CLIP_Q chosen by ||W||² rank in running buffer; high-importance tight clip preserves range, low-importance loose clip → more zeros → better zlib | -0.003 to -0.008 BPB indirect | **world-novel-candidate** **SHIPPED 0620Z** as CMP_HESSIAN_BIT_BUDGET_MARKER | 60 | 20260408T0620Z |
 
 ---
 
