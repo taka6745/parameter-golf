@@ -761,7 +761,7 @@ ceiling_actions:
 | gate | last_checked_utc | last_value | threshold | state | red_flag_ct |
 |---|---|---|---|---|---|
 | G1_tokens_per_min | 20260408T1503Z | 6.3M tok/min/pod (65k batch / 620 ms) | >=12.5M (3080Ti) / >=15M (3090) | DEGRADED-OK (S2 mode batch=65k smaller than full) | 0 |
-| G2_gpu_idle_streak | 20260408T2037Z | 8/8 pods running unique work at 89-100% GPU. LEGAL_TTT grid complete: LR_HALF_s42=1.416 FAIL, LR2X_s42=1.5097 CATASTROPHIC DIVERGE (+0.139), LN_SCALE_s42=1.4618 FAIL, 5STEPS_s1337=1.4142 FAIL. seed1337 confirms in flight on B/H/J. Pod E yellow flag cleared. | 0 streaks >5s util<80% | PASS | 0 |
+| G2_gpu_idle_streak | 20260408T2047Z | 8/8 pods at 95-100% GPU. **LN_SCALE + LEGAL_TTT n=2 CONFIRMED FAIL**: seed42=1.4618 seed1337=1.4618 mean=1.4618 (+0.0902 vs champion). LEGAL_TTT incompatible with LN_SCALE asymmetric residuals. STACK_INTERACTION_5way_S2 (norm_pct_dropout+asym_skip+asym_label+per_proj_lr+gated) seed42=1.4124, worse than gated-only. SP3_seq2048 Pod G train_loss=2.1873 @ 1400 steps (new tl low but no val_bpb). B/J LR grid seed1337 confirms still in flight. | 0 streaks >5s util<80% | PASS | 0 |
 | BONUS_NOTE | 20260408T1942Z | CMP_context_adaptive_rANS placeholder runs on H: n=2 mean (gated+normuon only, 2-way) = 1.40895 — worse than full 3-way (1.4054) confirming asym_skip_init adds value | N/A | INFO | 0 |
 | G3_artifact_bytes | 20260408T1330Z | ~16.7 MB (champion S2 stack) | >=16,252,928 B (16MB-0.5MB) | PASS | 0 |
 | G4_marker_count | 20260408T1503Z | 48/50 missing=['NS_STEPS_MARKER', 'XSA_MARKER'] | 46/46 expected (extras allowed) | PASS | 1 |
