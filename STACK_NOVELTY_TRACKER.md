@@ -10,7 +10,7 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 
 | layer | slot | novelty_id | world_novel | status | tl_delta | bpb_delta | owner_pod | updated_utc |
 |---|---|---|---|---|---|---|---|---|
-| L02_data | 1 | L02_coprime_stride | no | screened-pass | -0.16 (2.6818 @ step 500; mid-run reading at C5#6) |  | D | 20260408T0257Z |
+| L02_data | 1 | L02_coprime_stride | no | **n=2 PROMOTION-READY (weakest mean)** | -0.23 mean (seed42=2.6818, seed1337=2.5347, mean=2.6083) |  | D | 20260408T0322Z |
 | L04_attention | 1 | L04_gated_attention | no | **n=2 PROMOTION-READY (best mean)** | -0.62 mean (seed42=2.2295, seed1337=2.2219, mean=2.2257) |  | G | 20260408T0317Z |
 | L07_loss | 1 | L07_byte_weight | no | **n=2 PROMOTION-READY** | -0.48 mean (seed42=2.50, seed1337=2.229, mean=2.3645) |  | F | 20260408T0309Z |
 | L08_optimizer | 1 | L08_normuon | no | **n=2 PROMOTION-READY** | -0.47 mean (seed42=2.5208, seed1337=2.2285, mean=2.3747) |  | B | 20260408T0309Z |
