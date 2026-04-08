@@ -27,7 +27,12 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 | L09_ngram | 1 | L09_entropy_adaptive | no | screened-pass | -0.32 (2.5201 @ step 1300) |  | C | 20260408T0257Z |
 | L06_norm | 1 | L06_ln_scale | no | **n=3 PROMOTION-READY** | -0.54 mean (seeds 42/1337/999 = 2.4622/2.2217/2.2204, mean=2.30143) |  | E | 20260408T0345Z |
 | L05_ffn | 1 | L05_parallel_residuals | no | n=2 PROMOTION-READY | mean=2.24015 (seed42=2.2387, seed1337=2.2416) |  | G | 20260408T0457Z |
-| L05_ffn | 2 | L05_norm_pct_dropout | **yes (world-novel)** | **S2 LANDED — first val_bpb of campaign** | -0.012 vs L05_parallel_residuals (n=2 mean=2.22795); S2 confirm: train_loss=2.3082 → val_bpb=1.414 (cheap-pod F, 2300 steps, SKIP_FINAL_EVAL=0) | **1.414** (cheap-pod) | F | 20260408T0855Z |
+| L05_ffn | 2 | L05_norm_pct_dropout | **yes (world-novel)** | **confirmed-win** (S2 cheap-pod) | mean=2.22795 (S1) → S2 train_loss=2.3082 → val_bpb=1.4140 | **1.4140** (cheap F) | F | 20260408T0905Z |
+| L04_attention | 2 | L04_gated_attention | no | **confirmed-win — BEST val_bpb** (S2 cheap-pod) | n=5 best=2.2148, S2 train_loss=2.3154 → val_bpb=1.4098 | **1.4098** ★ (cheap G) | G | 20260408T0905Z |
+| L06_norm | 3 | L06_asymmetric_skip_init | **yes (world-novel)** | **confirmed-win** (S2 cheap-pod) | n=2 mean=2.2276 (S1) → S2 train_loss=2.3172 → val_bpb=1.4117 | **1.4117** (cheap E) | E | 20260408T0905Z |
+| L07_loss | 4 | L07_asym_label_smoothing | **yes (world-novel)** | **confirmed-win** (S2 cheap-pod) | n=2 mean=2.22885 (S1) → S2 train_loss=2.3068 → val_bpb=1.4138 | **1.4138** (cheap F) | F | 20260408T0905Z |
+| L08_optimizer | 3 | L08_per_proj_lr_split | **yes (world-novel)** | **confirmed-win** (S2 cheap-pod) | n=2 (S1) → S2 train_loss=2.3088 → val_bpb=1.4166 | **1.4166** (cheap B) | B | 20260408T0905Z |
+| L08_optimizer | 4 | L08_opt_chebyshev_ns | **yes (world-novel)** | screened-pass (S1) | seed42 train_loss=2.229 (1400 steps, NS=3 Chebyshev), need seed1337 + S2 |  | B | 20260408T0905Z |
 | L06_norm | 2 | L06_asymmetric_skip_init | **yes (world-novel)** | n=2 PROMOTION-READY | mean=2.2276 (seed42=2.2313, seed1337=2.2239); essentially equivalent to L06_ln_scale (2.2217 best single) |  | E | 20260408T0457Z |
 | L07_loss | 3 | L07_asym_label_smoothing | **yes (world-novel)** | **n=2 PROMOTION-READY — FIRST L07 WORLD-NOVEL** | mean=2.22885 (seed42=2.2283, seed1337=2.2294); -0.135 vs byte_weight mean=2.3645 |  | F | 20260408T0545Z |
 
