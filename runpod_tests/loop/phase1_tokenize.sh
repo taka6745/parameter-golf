@@ -22,7 +22,11 @@ cd /workspace/paramgolf
 mkdir -p logs
 
 JSONL=data/datasets/docs_selected.jsonl
-SP_MODEL=data/datasets/tokenizers/fineweb_8192_bpe.model
+# Source model lives OUTSIDE the tokenizers_dir because the script unlinks
+# the destination model_path before reading reuse_model_path. If they're the
+# same file the source gets deleted out from under the reuse path. Stash the
+# canonical model on container disk instead.
+SP_MODEL=/root/sp_models/fineweb_8192_bpe.model
 SPEC=data/tokenizer_specs_8192.json
 LOG=logs/phase1_tokenize.log
 

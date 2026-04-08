@@ -118,12 +118,35 @@ ln -sfn /root/paramgolf_bigdata/docs_selected.jsonl data/datasets/docs_selected.
 
 ---
 
-## What still has to happen before tokenize can restart
+## 2026-04-08 23:53Z — FIX 6: SP_MODEL must live OUTSIDE tokenizers_dir (PERMANENT)
 
-1. **Commit Fix 2** to the repo (the env-gated copy_from_hf_cache patch).
-2. **`git pull` on the pod** to pick up the patch + phase1_launch.sh.
-3. **Restart tokenize** with `MATCHED_FINEWEB_SKIP_HF_COPY=1` and
-   `--reuse-sp-model 8192=data/datasets/tokenizers/fineweb_8192_bpe.model`.
+- First tokenize attempt (PID 2124) crashed instantly with `FileNotFoundError:
+  /workspace/paramgolf/data/datasets/tokenizers/fineweb_8192_bpe.model`.
+- Root cause: `build_sentencepiece_tokenizer()` in
+  `data/download_hf_docs_and_tokenize.py:264-272` unlinks `model_path` (= the
+  destination model file) BEFORE checking the existence of `reuse_model_path`. If
+  the operator passes `--reuse-sp-model 8192=<same path as destination>`, the
+  source gets deleted out from under the reuse path.
+- Fix: stash the canonical SP model in `/root/sp_models/fineweb_8192_bpe.model`
+  (container disk, OUTSIDE the destination tokenizers_dir). Updated
+  `runpod_tests/loop/phase1_tokenize.sh` to use that path.
+- **PERMANENT** — checked into repo. The script bug is also fixable upstream
+  (skip unlink when source == destination), TODO add a one-line guard.
+
+## 2026-04-08 23:54Z — Tokenize launched, RUNNING ✓
+
+- `bash runpod_tests/loop/phase1_tokenize.sh` from /workspace/paramgolf launched
+  PID 2280.
+- 326% CPU (3+ cores active), 469 MB resident.
+- Log shows `Exporting dataset: fineweb10B_sp8192` — went straight to shard export
+  (skipped tokenizer training because `--reuse-sp-model` worked).
+- /workspace volume free, container disk / at 47%.
+- Expected ETA 30-60 min from launch. First shards should appear in
+  `data/datasets/datasets/fineweb10B_sp8192/fineweb_*_*.bin` within ~5-10 min.
+
+---
+
+## What still has to happen for the submission run to be reproducible from a fresh pod
 
 ## What still has to happen for the submission run to be reproducible from a fresh pod
 
@@ -132,6 +155,8 @@ ln -sfn /root/paramgolf_bigdata/docs_selected.jsonl data/datasets/docs_selected.
 - [ ] Make `data/download_hf_docs_and_tokenize.py` accept a `--docs-jsonl` flag so
       the operator can point at a pre-staged JSONL on container disk instead of
       hard-coding `output_root/`. Removes the need for the symlink dance.
+- [ ] Patch `build_sentencepiece_tokenizer()` to skip the `model_path.unlink()`
+      when `reuse_model_path == model_path` (or use a temp dir for the unlink).
 - [ ] Commit `data/tokenizers/fineweb_8192_bpe.model` to the repo (or document
       where to fetch it). Removes the need to push from Mac.
 - [ ] Add a Phase 1 README or top-of-PHASE1_PLAN.md note about the 50 GB volume
