@@ -531,18 +531,8 @@ ceiling_actions:
 
 | gate | last_checked_utc | last_value | threshold | state | red_flag_ct |
 |---|---|---|---|---|---|
-| G1_tokens_per_min | 20260408T0235Z | ~108M tok/min @ 600ms/step (3090s) | >=12.5M (3080Ti) / >=15M (3090) | PASS | 0 |
-| G2_gpu_idle_streak | 20260408T0235Z | 6 pods @ 42-84% util mid-experiment | 0 streaks >5s util<80% | WARN (mid-step idle is normal) | 0 |
-| G3_artifact_bytes | 20260408T0235Z | no S2 yet | >=16,252,928 B (16MB-0.5MB) | UNKNOWN | 0 |
-| G4_marker_count | 20260408T0220Z | 24/26 (XSA + 1 anchor not found, pre-existing) | 26/26 expected | WARN | 0 |
-| G5_queue_depth | 20260408T0235Z | min=58 pending across 6 pods (pod_filter hoisted to front) | every pod >=1 pending | PASS | 0 |
-
-<!--
-G1: All training data seen — tokens_per_min on each pod above the per-hardware floor
-G2: Full 10 minutes used — no GPU idle streaks (utilization < 80% for >5 s)
-G3: Full 16 MB used — final_int8_zlib_roundtrip artifact size in [16,252,928, 16,777,216] bytes
-G4: Patcher integrity — all 26 expected markers present in train_gpt.py after 08_patch_train_gpt.sh
-G5: Queue saturation (PD1) — every cheap pod has at least 1 pending experiment at all times
-
-red_flag_ct increments on PASS->FAIL transitions; reset only by human edit.
--->
+| G1_tokens_per_min | 20260408T1127Z | 0 tok/min | >=12.5M (3080Ti) / >=15M (3090) | UNKNOWN | 0 |
+| G2_gpu_idle_streak | 20260408T1127Z | no log yet | 0 streaks >5s util<80% | UNKNOWN | 0 |
+| G3_artifact_bytes | 20260408T1127Z | no logs | >=16,252,928 B (16MB-0.5MB) | UNKNOWN | 0 |
+| G4_marker_count | 20260408T1127Z | 0/46 missing=['ASYMMETRIC_SKIP_INIT_MARKER', 'ASYM_LABEL_SMOOTHING_MARKER', 'BYTE_WEIGHT_MARKER']... | 46/46 expected | FAIL | 1 |
+| G5_queue_depth | 20260408T1127Z | min=58 pending, per_pod={'A': 58, 'B': 83, 'C': 75, 'D': 69, 'E': 72, 'F': 76, 'G': 89} | every pod >=1 pending | PASS | 0 |
