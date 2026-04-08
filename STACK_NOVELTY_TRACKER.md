@@ -534,6 +534,62 @@ verdict_reason: tighter clip via val-gradient learned α reduces outlier dominan
 phd_defensible: no — empirical engineering candidate; clear ablation but no clean theoretical mechanism. Useful as a comp-novel ship if it works.
 owner: G/Mac
 
+### LSS_focal_loss_gamma_tuned
+added_utc: 20260408T1141Z
+source: C30 1141Z — Lin et al. 2017 focal loss + byte-vocab extension
+websearch_terms: ["focal loss byte language model", "byte vocab focal cross entropy", "per byte class learned gamma focal"]
+websearch_hits: 0 specific (focal loss for vision/general LM exists; per-byte-class learned γ for byte-vocab LM = 0)
+github_terms: ["byte_focal_loss llm", "per_byte_class focal gamma"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1141Z
+comp_pr_hits: 0 (no comp PR uses focal loss specifically; loss work is rare in the comp)
+verdict: world-novel-candidate
+verdict_reason: standard focal loss is from object detection; applying to byte-LM with PER-BYTE-CLASS learned γ (so common bytes like space/newline get higher γ to downweight, rare bytes get lower γ) is the new combination
+phd_defensible: yes — clear hypothesis (byte class imbalance dominates loss), falsifiable via γ sweep + class ablation, workshop paper feasible on "loss reweighting for highly-imbalanced byte vocabularies"
+owner: F
+
+### LSS_hellinger_bregman_divergence
+added_utc: 20260408T1141Z
+source: C30 1141Z — arXiv:2602.04380 Beyond KL + Banerjee 2005 Bregman theory
+websearch_terms: ["Hellinger distance language model loss", "Bregman divergence cross entropy LM training", "symmetric divergence byte LM"]
+websearch_hits: 0 (Bregman in RL policy optimization yes; byte-LM training loss = 0)
+github_terms: ["hellinger_loss llm", "bregman_divergence language_model"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1141Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: Hellinger / Bregman divergences are standard in info theory + RL but never as the primary training objective for byte-LM. Symmetry may help imbalanced byte vocab where KL's asymmetry is problematic.
+phd_defensible: yes — connects to information geometry + Bregman family theory, clear ablation (KL vs Hellinger vs JS), training stability metric (gradient variance) gives empirical handle
+owner: F
+
+### NGR_neural_engram_hash_cache
+added_utc: 20260408T1141Z
+source: C30 1141Z — DeepSeek Engram (2024) + memory-augmented LM survey
+websearch_terms: ["neural engram language model hash", "trainable hash table n-gram bias LM", "DeepSeek Engram 2024"]
+websearch_hits: <5 (Engram is an emerging architecture; trainable hash on n-gram bias for byte-LM is custom)
+github_terms: ["engram_cache llm", "trainable_hash ngram bias"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1141Z
+comp_pr_hits: 0 (no Engram-style trainable hash in any of the 173 NGRAM PRs)
+verdict: world-novel-candidate
+verdict_reason: distinct from existing TABULATION_HASH (fixed XOR) and ENGRAM_LITE (learnable embedding head, not learnable hash routing). The TRAINABLE collision-resolution is the novelty.
+phd_defensible: no — engineering candidate; the hypothesis is "learnable routing > fixed XOR" but no clean theoretical bound. Falls back to comp-novel if PhD test enforced strictly.
+owner: C
+
+### NGR_position_vocab_adaptive_prune
+added_utc: 20260408T1141Z
+source: C30 1141Z — APT arXiv:2405.12842 + n-gram synthesis
+websearch_terms: ["position-aware n-gram bias pruning LM", "per-position bucket gate language model", "adaptive n-gram pruning byte"]
+websearch_hits: 0
+github_terms: ["position_aware_ngram_gate", "per_position_bucket_prune"]
+github_hits: 0
+comp_pr_audit_utc: 20260408T1141Z
+comp_pr_hits: 0
+verdict: world-novel-candidate
+verdict_reason: distinct from #3 CTX_PARTITIONED_TAB (which partitions the HASH INPUT by prev3 mod 16). This partitions the EVAL CONTEXT (sequence position) and learns gates per position class to mute low-info buckets.
+phd_defensible: no — engineering candidate. The position-class boundaries are arbitrary, no clean theoretical motivation. Comp-novel ship if it works.
+owner: C
+
 The PhD defensibility check (PD3) requires:
   - clear hypothesis + falsification criterion
   - clear theoretical or empirical mechanism
