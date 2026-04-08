@@ -15,6 +15,7 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 | L07_loss | 1 | L07_byte_weight | no | screened-pass | -0.34 (vs CHAMP_L5_seed13=2.84 baseline; 2.50 result) |  | F | 20260408T0251Z |
 | L08_optimizer | 1 | L08_normuon | no | screened-pass | -0.32 (vs CHAMP_L5_seed13=2.84; 2.5208 result) |  | B | 20260408T0251Z |
 | L09_ngram | 1 | L09_entropy_adaptive | no | screened-pass | -0.32 (2.5201 @ step 1300) |  | C | 20260408T0257Z |
+| L06_norm | 1 | L06_ln_scale | no | screened-pass | -0.38 (2.4622 @ step 1100) |  | E | 20260408T0303Z |
 
 <!-- rows added at runtime; status ∈ pending|in-flight|screened-pass|screened-fail|confirmed-win|confirmed-fail|demoted -->
 <!-- world_novel ∈ yes|no|auditing -->
