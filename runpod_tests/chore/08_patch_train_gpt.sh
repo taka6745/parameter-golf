@@ -1891,6 +1891,145 @@ else:
     else:
         print("  ✗ EMB_DCT forward anchor not found — skipping")
 
+# Patch 36 (C90 build #5, infra L11 #1): USE_SPD_NGRAM_TILE_CACHE=1 → halve n-gram
+# table gather bandwidth via in-place fp16 cast on first forward call. Bigram + trigram
+# + fourgram tables drop from ~128MB fp32 to ~64MB fp16. Downstream gather promotes
+# back to logits.dtype automatically. Default OFF preserves bit-exact baseline.
+# Stacks with TABULATION_HASH (Patch 15), CTX_PARTITIONED_TAB (Patch 31),
+# ENTROPY_ADAPTIVE_NGRAM (Patch 14), NGRAM_GATE (Patch 12) since cast is on the
+# buffer not the hash function.
+# Idempotent via SPD_NGRAM_TILE_CACHE_MARKER. Anchored on the 3-line block from Patch 6.
+if "SPD_NGRAM_TILE_CACHE_MARKER" in content:
+    pass
+else:
+    old_ngram_apply_top = """            _ids_flat = input_ids.reshape(-1).long()  # (B*S,)
+            _H = self._ngram_hash"""
+    new_ngram_apply_top = """            _ids_flat = input_ids.reshape(-1).long()  # (B*S,)
+            _H = self._ngram_hash
+            # SPD_NGRAM_TILE_CACHE_MARKER: lazy fp16 in-place cast for halved gather bw
+            if int(os.environ.get('USE_SPD_NGRAM_TILE_CACHE', '0')) and not getattr(self, '_spd_ngram_cached', False):
+                try:
+                    if self._bigram_tab.numel() > 1 and self._bigram_tab.dtype != torch.float16:
+                        _bg16 = self._bigram_tab.detach().to(dtype=torch.float16).contiguous()
+                        del self._bigram_tab
+                        self.register_buffer('_bigram_tab', _bg16, persistent=False)
+                        print('SPD_NGRAM_TILE_CACHE: cast _bigram_tab to fp16, shape', tuple(_bg16.shape))
+                    if self._trigram_tab.numel() > 1 and self._trigram_tab.dtype != torch.float16:
+                        _tg16 = self._trigram_tab.detach().to(dtype=torch.float16).contiguous()
+                        del self._trigram_tab
+                        self.register_buffer('_trigram_tab', _tg16, persistent=False)
+                        print('SPD_NGRAM_TILE_CACHE: cast _trigram_tab to fp16, shape', tuple(_tg16.shape))
+                    if self._fourgram_tab.numel() > 1 and self._fourgram_tab.dtype != torch.float16:
+                        _fg16 = self._fourgram_tab.detach().to(dtype=torch.float16).contiguous()
+                        del self._fourgram_tab
+                        self.register_buffer('_fourgram_tab', _fg16, persistent=False)
+                        print('SPD_NGRAM_TILE_CACHE: cast _fourgram_tab to fp16, shape', tuple(_fg16.shape))
+                    self._spd_ngram_cached = True
+                except Exception as _spd_e:
+                    print('SPD_NGRAM_TILE_CACHE: cast failed (will fall through to fp32):', _spd_e)
+                    self._spd_ngram_cached = True"""
+    if old_ngram_apply_top in content:
+        content = content.replace(old_ngram_apply_top, new_ngram_apply_top)
+        print("  ✓ added SPD_NGRAM_TILE_CACHE fp16 in-place cast")
+    else:
+        print("  ✗ SPD_NGRAM_TILE_CACHE anchor not found — skipping (Patch 6 NGRAM_BIAS not present?)")
+
+# Patch 37 (C90 build #6, infra L11 #2): USE_SPD_PINNED_PREFETCH=1 → 1-deep async
+# prefetch of next batch into pinned host memory + non-blocking H2D copy. Wraps
+# DistributedTokenLoader (invariant under all 34 patches), single worker thread per
+# kick with strict join discipline. Falls back to sync path on env var off OR on
+# (PROGRESSIVE_SEQ) phase transition arg mismatch. Stacks with COPRIME_STRIDE (P20)
+# and DAT_BYTE_ENTROPY_CURRICULUM (P32) since the inner TokenStream still drives shard
+# advancement; the prefetch thread calls take() with strict happens-before.
+# Idempotent via SPD_PINNED_PREFETCH_MARKER.
+if "SPD_PINNED_PREFETCH_MARKER" in content:
+    pass
+else:
+    old_dtl = """class DistributedTokenLoader:
+    # Each call consumes a contiguous chunk from the shared token stream, then slices out
+    # one disjoint span per rank. The extra "+1" token lets us build (x, y) by shifting.
+    def __init__(self, pattern: str, rank: int, world_size: int, device: torch.device):
+        self.rank = rank
+        self.world_size = world_size
+        self.device = device
+        self.stream = TokenStream(pattern)
+
+    def next_batch(self, global_tokens: int, seq_len: int, grad_accum_steps: int) -> tuple[Tensor, Tensor]:
+        local_tokens = global_tokens // (self.world_size * grad_accum_steps)
+        per_rank_span = local_tokens + 1
+        chunk = self.stream.take(per_rank_span * self.world_size)
+        start = self.rank * per_rank_span
+        local = chunk[start : start + per_rank_span].to(dtype=torch.int64)
+        x = local[:-1].reshape(-1, seq_len)
+        y = local[1:].reshape(-1, seq_len)
+        return x.to(self.device, non_blocking=True), y.to(self.device, non_blocking=True)"""
+    new_dtl = """class DistributedTokenLoader:
+    # SPD_PINNED_PREFETCH_MARKER: optional 1-deep async prefetch into pinned host mem.
+    def __init__(self, pattern: str, rank: int, world_size: int, device: torch.device):
+        self.rank = rank
+        self.world_size = world_size
+        self.device = device
+        self.stream = TokenStream(pattern)
+        self._spd_prefetch_enabled = bool(int(os.environ.get('USE_SPD_PINNED_PREFETCH', '0')))
+        self._spd_prefetched = None
+        self._spd_prefetch_thread = None
+        self._spd_prefetch_args = None
+
+    def _spd_build_pinned(self, global_tokens, seq_len, grad_accum_steps):
+        local_tokens = global_tokens // (self.world_size * grad_accum_steps)
+        per_rank_span = local_tokens + 1
+        chunk = self.stream.take(per_rank_span * self.world_size)
+        start = self.rank * per_rank_span
+        local = chunk[start : start + per_rank_span].to(dtype=torch.int64)
+        x = local[:-1].reshape(-1, seq_len)
+        y = local[1:].reshape(-1, seq_len)
+        try:
+            x = x.contiguous().pin_memory()
+            y = y.contiguous().pin_memory()
+        except Exception:
+            x = x.contiguous()
+            y = y.contiguous()
+        return x, y
+
+    def _spd_kick_prefetch(self, global_tokens, seq_len, grad_accum_steps):
+        import threading as _thr
+        def _worker():
+            try:
+                self._spd_prefetched = self._spd_build_pinned(global_tokens, seq_len, grad_accum_steps)
+            except Exception as _spd_pe:
+                print('SPD_PINNED_PREFETCH: worker exception (fallback to sync):', _spd_pe)
+                self._spd_prefetched = None
+        self._spd_prefetch_thread = _thr.Thread(target=_worker, daemon=True, name='spd_prefetch')
+        self._spd_prefetch_thread.start()
+
+    def next_batch(self, global_tokens: int, seq_len: int, grad_accum_steps: int) -> tuple[Tensor, Tensor]:
+        if self._spd_prefetch_enabled:
+            _curr_args = (global_tokens, seq_len, grad_accum_steps)
+            if self._spd_prefetch_thread is not None and self._spd_prefetch_thread.is_alive():
+                self._spd_prefetch_thread.join()
+            if self._spd_prefetched is not None and self._spd_prefetch_args == _curr_args:
+                _x_pin, _y_pin = self._spd_prefetched
+                self._spd_prefetched = None
+            else:
+                _x_pin, _y_pin = self._spd_build_pinned(global_tokens, seq_len, grad_accum_steps)
+            self._spd_prefetch_args = _curr_args
+            self._spd_kick_prefetch(global_tokens, seq_len, grad_accum_steps)
+            return _x_pin.to(self.device, non_blocking=True), _y_pin.to(self.device, non_blocking=True)
+        # Original sync path — bit-exact when env var unset.
+        local_tokens = global_tokens // (self.world_size * grad_accum_steps)
+        per_rank_span = local_tokens + 1
+        chunk = self.stream.take(per_rank_span * self.world_size)
+        start = self.rank * per_rank_span
+        local = chunk[start : start + per_rank_span].to(dtype=torch.int64)
+        x = local[:-1].reshape(-1, seq_len)
+        y = local[1:].reshape(-1, seq_len)
+        return x.to(self.device, non_blocking=True), y.to(self.device, non_blocking=True)"""
+    if old_dtl in content:
+        content = content.replace(old_dtl, new_dtl)
+        print("  ✓ added SPD_PINNED_PREFETCH 1-deep async prefetch")
+    else:
+        print("  ✗ SPD_PINNED_PREFETCH anchor not found — skipping")
+
 # Patch 34 (C90 mass-build #3, world-novel L10 #1): USE_CMP_HESSIAN_BIT_BUDGET=1
 # → make int8 quantization clip-quantile per-tensor based on a Hessian proxy ||W||².
 # High-importance tensors (top quantile of mean-square magnitude) get a TIGHT clip
@@ -1990,6 +2129,8 @@ expected = [
     "SKIP_LAST_VAL_MARKER",
     "SKIP_POST_LOOP_MARKER",
     "SMEAR_GATE_MARKER",
+    "SPD_NGRAM_TILE_CACHE_MARKER",
+    "SPD_PINNED_PREFETCH_MARKER",
     "TABULATION_HASH_MARKER",
     "WAVELET_GPT_MARKER",
     "XSA_MARKER",

@@ -15,6 +15,16 @@ Schema for every row:
 
 ---
 
+## L11 — Infra/throughput (virtual cross-cutting layer)
+
+| priority | name | source | hypothesis | expected_delta | novelty_estimate | code_skeleton_loc | added_utc |
+|---|---|---|---|---|---|---|---|
+| 1 | SPD_ngram_tile_cache | C90#5 0700Z infra build | in-place fp16 cast of bigram/trigram/fourgram tables on first forward → halves gather bandwidth on n-gram critical path | 5-10% step time reduction (n-gram path) | infra-novel **SHIPPED 0700Z** as SPD_NGRAM_TILE_CACHE_MARKER | 50 | 20260408T0700Z |
+| 2 | SPD_pinned_prefetch | C90#6 0700Z infra build | 1-deep async prefetch of next batch in pinned host memory + non-blocking H2D copy via background thread on DistributedTokenLoader | 3-7% step time reduction (data load overlap) | infra-novel **SHIPPED 0700Z** as SPD_PINNED_PREFETCH_MARKER | 100 | 20260408T0700Z |
+| 3 | SPD_rmsnorm_fused_into_linear | C90 plan-A — DEFERRED, deemed too risky for in-flight stack (interacts with LN_SCALE) | precompute rmsnorm scale into next Linear weight; eliminate F.rms_norm forward op per block | 5-15% step time reduction | infra-novel | 70 | 20260408T0700Z |
+
+---
+
 ## L01 — Tokenizer candidates
 
 | priority | name | source | hypothesis | expected_delta | novelty_estimate | code_skeleton_loc | added_utc |
