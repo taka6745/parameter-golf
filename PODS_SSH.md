@@ -1,6 +1,25 @@
-# PODS_SSH.md — RunPod test fleet (2026-04-08, updated post-Pod-A loss)
+# PODS_SSH.md — RunPod test fleet (2026-04-09, Phase 1 H100)
 
-**6 pods alive.** Pod A (`tyf0q5l1kgefgx` / paramgolf-v2 / RTX 3080 Ti) was removed from the fleet during the campaign session — its row has been kept here as a tombstone for history but it's GONE. The campaign now runs on Pods B–G.
+**1 pod alive.** All 8 night-mode pods (B/C/E/F/G/H/I/J) were terminated at 2107Z after NIGHT_MODE ended. A new single H100 PCIe pod was spun up 2026-04-09 for Phase 1 target stack validation (narrow rule override, Phase 1 only).
+
+## Pod K — paramgolf-phase1-h100 (NVIDIA H100 80GB PCIe) — PHASE 1 ACTIVE
+
+- **ID**: `9lfji49c6ngy9a`
+- **User hash**: `64410a72`
+- **GPU**: 1 × NVIDIA H100 PCIe 80GB HBM3
+- **Cost**: $2.39/h (secure cloud)
+- **Purpose**: Phase 1 — validate SP8192 + Score-First TTT + Parallel Residuals + AR-GPTQ + int6 + brotli target stack. Runs PR #1477 / #1019 code path as-is (requires FlashAttention 3, Hopper-only).
+- **SSH proxy**: `ssh 9lfji49c6ngy9a-64410a72@ssh.runpod.io -i ~/.ssh/id_ed25519`
+- **Image**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04` (will upgrade torch to 2.9.1 + install FA3 during bootstrap)
+- **Disk**: 100 GB container + 50 GB volume at `/workspace`
+- **Kill discipline**: terminated IMMEDIATELY after TARGET_STACK lands n=2 — no drift into Phase 2
+- **Hard cost cap**: $15 (~6 hours at $2.39/h)
+- **Plan reference**: `PHASE1_PLAN.md` at repo root
+- **Spin-up timestamp**: 2026-04-09 ~21:30Z
+
+---
+
+## Historical fleet (all terminated 2026-04-08 2107Z)
 
 **Key**: SSH key is `~/.ssh/id_ed25519`. Workspace path on every pod: `/workspace`.
 

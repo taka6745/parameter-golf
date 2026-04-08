@@ -223,9 +223,22 @@ Stretch goal: **2 hours** if every port goes clean-first-try.
 
 ## Post-Phase 1 → Phase 2 gate
 
-Phase 2 is **torch.compile re-enable** on cheap 3090 hardware (NO H100). Phase 2 can start only once Phase 1 has `TARGET_STACK` n=2 confirmed AND the Phase 1 H100 pod has been terminated. Phase 3 (custom kernels: fused Triton n-gram+attention, persistent CUDAGraph, int6 dequant fusion, custom GQA SDPA) can start only once Phase 2 has validated a stable torch.compile baseline with measured ms/step delta ≥ 15%.
+**Phase 2 = all speed work**, on cheap 3090 / 4070 Ti hardware (NO H100). Phase 2 subsumes what I previously separated as "Phase 2 compile" and "Phase 3 kernels" — they're both speed and should be one phase. Phase 2 can start only once Phase 1 has `TARGET_STACK` n=2 confirmed AND the Phase 1 H100 pod has been terminated.
 
-This serial ordering is mandatory:
-- Kernel work on an unstable target stack gets invalidated every time the target changes → Phase 1 must land first
-- Custom kernels have to beat the compile-optimized path, not the eager path → Phase 2 compile baseline must land before Phase 3
-- Phase 2/3 hardware is cheap 3090 / 4070 Ti — the H100 rule resumes after Phase 1 terminates
+### Phase 2 shot ordering
+
+Phase 2 Shot 1 is the trivial lever; Shots 2+ are the actual kernel work:
+
+1. **torch.compile re-enable** (~30 min, 1 pod) — the stack currently has `USE_TORCH_COMPILE=0` on every experiment because of an old breakage. Find why, fix it, measure the compile-on vs compile-off ms/step delta on the Phase 1 target stack. Expected 15-35% free throughput.
+2. **Persistent CUDAGraph capture** for full forward+backward+opt.step — eliminate per-iter kernel launch overhead.
+3. **Fused n-gram bias gather + GQA attention Triton** — the n-gram bias currently materializes an int buffer in a separate kernel. Fuse with the attention logit computation.
+4. **GPTQ int6 dequant + matmul fusion** — currently dequantizes weights to fp16 in a separate kernel before matmul. Fuse.
+5. **Custom SDPA replacement** tuned for (8h, 4kv, head_dim=64, softcap=30) GQA shape.
+6. **Int8 tabulation hash GPU gather** — move CPU-side n-gram table lookup onto GPU.
+7. **FP8 compute paths** (requires 4070 Ti or 4090 for Ada) — matmul in FP8, accumulate in bf16.
+8. **CPU-side worker pool** — saturate the 8-16 vCPU / 30 GB RAM with parallel n-gram table builds, result analysis, checkpoint compression sweeps.
+
+Mandatory ordering:
+- Shot 1 (compile) gates everything else — custom kernels have to beat the compile-optimized path, not the eager path
+- Phase 1 gates Phase 2 entirely — kernel work on an unstable target stack gets invalidated every time the target changes
+- Phase 2 hardware reverts to cheap 3090/4070 Ti — the H100 rule resumes after Phase 1 terminates
