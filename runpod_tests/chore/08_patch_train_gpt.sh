@@ -1891,6 +1891,67 @@ else:
     else:
         print("  ✗ EMB_DCT forward anchor not found — skipping")
 
+# Patch 38 (C90 build #8, world-novel L01 #1): USE_TOK_INPUT_SMOOTH=1 → input-side
+# analog of label smoothing on the embedding lookup. With prob p (default 0.02),
+# replace embed[T] with 0.5*embed[T] + 0.5*mean(embed[K random tokens]). The K
+# random neighbors are sampled fresh per-forward (no precomputation), so this is
+# zero-overhead startup-wise and adds ~1 RNG + 1 mean per smoothed position.
+#
+# World-novel: 0 papers on TRAINING-TIME embedding smoothing via random-K mixture.
+# Standard "label smoothing" (Szegedy 2016) operates on OUTPUT logits. Standard
+# "subword regularization" (Kudo 2018) drops or replaces input tokens. Standard
+# "embedding dropout" zeros entire embedding rows. NONE smooth the lookup result
+# itself with a soft mixture of random vocab neighbors.
+#
+# Win mechanism: prevents the embedding for rare tokens from drifting too far from
+# the bulk of the embedding cloud → better calibration on tail bytes → smaller BPB
+# on hard-to-predict regions of FineWeb.
+#
+# Stacks correctly with EMB_DCT_COEFFICIENT_ENERGY_TRUNCATE (P33) because the
+# smoothing happens AFTER the DCT projection has been applied to tok_emb.weight,
+# and operates on the LOOKUP RESULT not on the embedding matrix. Both are pre-rmsnorm
+# operations that compose linearly.
+#
+# Idempotent via TOK_INPUT_SMOOTH_MARKER. Anchored on the post-Patch-33 forward()
+# top block (the `x = self.tok_emb(input_ids)` line + the F.rms_norm follow-up).
+# Default OFF preserves bit-exact baseline.
+if "TOK_INPUT_SMOOTH_MARKER" in content:
+    pass
+else:
+    old_emb_then_rms = """        x = self.tok_emb(input_ids)
+        x = F.rms_norm(x, (x.size(-1),))"""
+    new_emb_then_rms = """        x = self.tok_emb(input_ids)
+        # TOK_INPUT_SMOOTH_MARKER: training-time input embedding smoothing.
+        # With prob TOK_INPUT_SMOOTH_P, blend embed[T] with the mean of K random
+        # vocab embeddings. World-novel input regularization analog of label smoothing.
+        if self.training and int(os.environ.get('USE_TOK_INPUT_SMOOTH', '0')):
+            _tis_p = float(os.environ.get('TOK_INPUT_SMOOTH_P', '0.02'))
+            _tis_k = int(os.environ.get('TOK_INPUT_SMOOTH_K', '4'))
+            _tis_alpha = float(os.environ.get('TOK_INPUT_SMOOTH_ALPHA', '0.5'))
+            if _tis_p > 0.0:
+                _vocab = self.tok_emb.weight  # (V, D)
+                _V = _vocab.size(0)
+                _B, _S, _D = x.shape
+                # Build a per-position mask of which positions to smooth.
+                _mask = (torch.rand(_B, _S, device=x.device) < _tis_p)
+                if _mask.any():
+                    # Sample K random vocab indices per smoothed position.
+                    _n_smoothed = int(_mask.sum().item())
+                    _rand_ids = torch.randint(0, _V, (_n_smoothed, _tis_k), device=x.device)
+                    # Mean of K random embeddings, shape (n_smoothed, D)
+                    _rand_mean = _vocab[_rand_ids].mean(dim=1)
+                    # Blend in-place at the masked positions.
+                    _flat = x.view(-1, _D)
+                    _flat_mask = _mask.view(-1)
+                    _flat[_flat_mask] = (1.0 - _tis_alpha) * _flat[_flat_mask] + _tis_alpha * _rand_mean
+                    x = _flat.view(_B, _S, _D)
+        x = F.rms_norm(x, (x.size(-1),))"""
+    if old_emb_then_rms in content:
+        content = content.replace(old_emb_then_rms, new_emb_then_rms)
+        print("  ✓ added TOK_INPUT_SMOOTH_MARKER (training-time random-K input smoothing)")
+    else:
+        print("  ✗ TOK_INPUT_SMOOTH anchor not found — skipping")
+
 # Patch 36 (C90 build #5, infra L11 #1): USE_SPD_NGRAM_TILE_CACHE=1 → halve n-gram
 # table gather bandwidth via in-place fp16 cast on first forward call. Bigram + trigram
 # + fourgram tables drop from ~128MB fp32 to ~64MB fp16. Downstream gather promotes
@@ -2132,6 +2193,7 @@ expected = [
     "SPD_NGRAM_TILE_CACHE_MARKER",
     "SPD_PINNED_PREFETCH_MARKER",
     "TABULATION_HASH_MARKER",
+    "TOK_INPUT_SMOOTH_MARKER",
     "WAVELET_GPT_MARKER",
     "XSA_MARKER",
 ]
