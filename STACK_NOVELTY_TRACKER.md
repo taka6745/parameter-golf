@@ -26,7 +26,9 @@ See `STACK_NOVELTY_PLAN.md` for the full schema spec and the RemoteTrigger paylo
 | STACK_4WAY_L04_L08_L07_L06 | - | gated+normuon+byte_weight+ln_scale STACKED | no | screened-pass | -0.61 (seed42=2.2303, NO interaction penalty) |  | G | 20260408T0420Z |
 | L09_ngram | 1 | L09_entropy_adaptive | no | screened-pass | -0.32 (2.5201 @ step 1300) |  | C | 20260408T0257Z |
 | L06_norm | 1 | L06_ln_scale | no | **n=3 PROMOTION-READY** | -0.54 mean (seeds 42/1337/999 = 2.4622/2.2217/2.2204, mean=2.30143) |  | E | 20260408T0345Z |
-| L05_ffn | 1 | L05_parallel_residuals | no | screened-pass | -0.60 (2.2387 @ step 1400, n=1, awaiting seed1337) |  | G | 20260408T0334Z |
+| L05_ffn | 1 | L05_parallel_residuals | no | n=2 PROMOTION-READY | mean=2.24015 (seed42=2.2387, seed1337=2.2416) |  | G | 20260408T0457Z |
+| L05_ffn | 2 | L05_norm_pct_dropout | **yes (world-novel)** | **screened-pass — BEATS COMP-PORT** | -0.018 vs L05_parallel_residuals (norm_pct_dropout seed1337=2.2224 < parallel_residuals mean=2.24015); awaiting seed42 |  | F | 20260408T0457Z |
+| L06_norm | 2 | L06_asymmetric_skip_init | **yes (world-novel)** | n=2 PROMOTION-READY | mean=2.2276 (seed42=2.2313, seed1337=2.2239); essentially equivalent to L06_ln_scale (2.2217 best single) |  | E | 20260408T0457Z |
 
 <!-- rows added at runtime; status ∈ pending|in-flight|screened-pass|screened-fail|confirmed-win|confirmed-fail|demoted -->
 <!-- world_novel ∈ yes|no|auditing -->
