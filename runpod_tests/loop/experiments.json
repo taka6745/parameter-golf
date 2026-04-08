@@ -1,5 +1,47 @@
 [
   {
+    "name": "STACK_GATED_LEGAL_TTT_LR2X_seed42",
+    "pod_filter": [
+      "J"
+    ],
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "USE_GATED_ATTENTION": "1",
+    "USE_LEGAL_TTT": "1",
+    "LEGAL_TTT_LR": "0.002",
+    "SEED": "42"
+  },
+  {
+    "name": "STACK_GATED_LEGAL_TTT_LR2X_seed1337",
+    "pod_filter": [
+      "J"
+    ],
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "USE_GATED_ATTENTION": "1",
+    "USE_LEGAL_TTT": "1",
+    "LEGAL_TTT_LR": "0.002",
+    "SEED": "1337"
+  },
+  {
     "name": "STACK_GATED_LEGAL_TTT_5STEPS_seed42",
     "pod_filter": [
       "F"
