@@ -15,6 +15,18 @@ Schema for every row:
 
 ---
 
+## L13 — Eval-time techniques (LEGAL only)
+
+The single biggest unspent leverage per COMPETITION_SCOPE.md gap analysis. 234
+PRs use TTT (best 0.3212 with SLOT), 85 PRs use LEGAL_TTT (best 0.7139). The
+top legal open PRs (#642, #620, #512, #940, #761, #1185) all use this category.
+
+| priority | name | source | hypothesis | expected_delta | novelty_estimate | code_skeleton_loc | added_utc |
+|---|---|---|---|---|---|---|---|
+| 1 | LEGAL_TTT_per_batch_split | C90 1148Z — port from PRs #642/#620/#512/#940/#761 | per-batch context/target split (50/50) + K SGD steps on context + eval CE on target only; weights reset between batches; legal because no val-data leakage across docs | -0.20 to -0.40 BPB (cheap-pod 1.41 → projected ~1.0-1.2 with TTT) | **comp-port** **SHIPPED 1148Z** as LEGAL_TTT_MARKER | 200 | 20260408T1148Z |
+
+---
+
 ## L11 — Infra/throughput (virtual cross-cutting layer)
 
 | priority | name | source | hypothesis | expected_delta | novelty_estimate | code_skeleton_loc | added_utc |
