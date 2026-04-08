@@ -1,5 +1,45 @@
 [
   {
+    "name": "L10_qvdedup_seed42",
+    "pod_filter": [
+      "G"
+    ],
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "USE_CMP_QUANT_VALUE_DEDUP": "1",
+    "CMP_QUANT_DEDUP_STEP": "2",
+    "SEED": "42"
+  },
+  {
+    "name": "L10_qvdedup_seed1337",
+    "pod_filter": [
+      "G"
+    ],
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "USE_CMP_QUANT_VALUE_DEDUP": "1",
+    "CMP_QUANT_DEDUP_STEP": "2",
+    "SEED": "1337"
+  },
+  {
     "name": "L09_lfinv_seed42",
     "pod_filter": [
       "C"
