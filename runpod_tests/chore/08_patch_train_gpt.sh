@@ -670,6 +670,65 @@ else:
         content = content.replace(old_ng_apply_block, new_ng_apply_block)
         print("  ✓ added ENTROPY_ADAPTIVE_NGRAM gating")
 
+# Patch 46: USE_NGRAM_BACKOFF=1 → order-adaptive Stupid Backoff (Brants 2007).
+# THE biggest legal technique gap after LEGAL_TTT. Top 30 legal PRs in COMPETITION_SCOPE.md
+# all use multi-order n-gram backoff. Examples: #802 0.9123 (10L + Multi-Order N-gram Backoff),
+# #788 0.9059 (11L + order-adaptive 9-gram backoff), #828 0.9076 (Multi-Order Backoff + Matrix),
+# #761 0.9581 (Score-First TTT + N-gram Backoff). Best (#1028 = 0.8104) uses N-gram Backoff.
+#
+# OUR CURRENT: weighted SUM of bigram + trigram + 4-gram bias log-probs at every position.
+# THIS PATCH: at each position, use the HIGHEST-CONFIDENCE order ONLY:
+#   - if peak(4-gram[h]) > T4: use 4-gram with weight 1.0 (full confidence)
+#   - elif peak(3-gram[h]) > T3: use 3-gram with weight α (α=0.4 = Brants 2007)
+#   - else: use bigram with weight α² (=0.16)
+# The "peak" is the max log-prob across vocab — concentrated distributions = confident counts.
+# Hash collisions in lower orders contribute noise; using only the most-confident order strips
+# that noise. This is the canonical Stupid Backoff (Brants 2007 Google n-gram paper).
+#
+# Marker: NGRAM_BACKOFF_MARKER. Env: USE_NGRAM_BACKOFF=1, NGRAM_BACKOFF_THRESH4=1.0,
+# NGRAM_BACKOFF_THRESH3=1.0, NGRAM_BACKOFF_ALPHA=0.4 (defaults). Idempotent.
+if "NGRAM_BACKOFF_MARKER" in content:
+    print("  ✓ ngram backoff already applied")
+else:
+    # Anchor on the FINAL appearance of the line — after Patch 14 entropy_adaptive ran.
+    # The full anchor is the entropy_adaptive comment + the if line.
+    old_bo_anchor = """        # NGRAM_BIAS_MARKER apply: blend in precomputed n-gram log-probs
+        if self._ngram_enabled and self._bigram_tab.numel() > 1:
+            _ids_flat = input_ids.reshape(-1).long()  # (B*S,)"""
+    new_bo_anchor = """        # NGRAM_BIAS_MARKER apply: blend in precomputed n-gram log-probs
+        # NGRAM_BACKOFF_MARKER: order-adaptive Stupid Backoff (Brants 2007)
+        if self._ngram_enabled and bool(int(os.environ.get("USE_NGRAM_BACKOFF", "0"))) and self._bigram_tab.numel() > 1 and self._fourgram_tab.numel() > 1:
+            _ids_flat_bo = input_ids.reshape(-1).long()
+            _H_bo = self._ngram_hash
+            _bo_t4 = float(os.environ.get("NGRAM_BACKOFF_THRESH4", "1.0"))
+            _bo_t3 = float(os.environ.get("NGRAM_BACKOFF_THRESH3", "1.0"))
+            _bo_a = float(os.environ.get("NGRAM_BACKOFF_ALPHA", "0.4"))
+            _B_bo, _S_bo = input_ids.shape
+            _prev2_bo = torch.cat([torch.zeros(_B_bo, 1, device=input_ids.device, dtype=input_ids.dtype), input_ids[:, :-1]], dim=1).reshape(-1).long()
+            _prev3_bo = torch.cat([torch.zeros(_B_bo, 2, device=input_ids.device, dtype=input_ids.dtype), input_ids[:, :-2]], dim=1).reshape(-1).long()
+            _h_bi_bo = (_ids_flat_bo * 36313) % _H_bo
+            _h_tri_bo = (_prev2_bo * 36313 + _ids_flat_bo * 27191) % _H_bo
+            _h_four_bo = (_prev3_bo * 36313 + _prev2_bo * 27191 + _ids_flat_bo * 51497) % _H_bo
+            _bi_bo = self._bigram_tab[_h_bi_bo]
+            _tri_bo = self._trigram_tab[_h_tri_bo]
+            _four_bo = self._fourgram_tab[_h_four_bo]
+            _peak4_bo = _four_bo.amax(dim=-1, keepdim=True)
+            _peak3_bo = _tri_bo.amax(dim=-1, keepdim=True)
+            _use_4_bo = (_peak4_bo > _bo_t4).to(_four_bo.dtype)
+            _use_3_bo = (1 - _use_4_bo) * (_peak3_bo > _bo_t3).to(_tri_bo.dtype)
+            _use_bi_bo = 1 - _use_4_bo - _use_3_bo
+            _ng_bo = _use_4_bo * _four_bo + _use_3_bo * _tri_bo * _bo_a + _use_bi_bo * _bi_bo * (_bo_a * _bo_a)
+            if _gate is not None:
+                _ng_bo = _gate * _ng_bo
+            logits = logits + _ng_bo
+        elif self._ngram_enabled and self._bigram_tab.numel() > 1:
+            _ids_flat = input_ids.reshape(-1).long()  # (B*S,)"""
+    if old_bo_anchor in content:
+        content = content.replace(old_bo_anchor, new_bo_anchor)
+        print("  ✓ added NGRAM_BACKOFF dispatch (Patch 46)")
+    else:
+        print("  ⚠ NGRAM_BACKOFF anchor not found — skipping (anchor moved?)")
+
 # Patch 22: USE_ENGRAM_LITE=1 → learnable hash-embedding n-gram head (PR #1440).
 # From "[Submission] EngramLite + Mousse + Progressive Depth Recurrence + TTT" — claimed
 # val_bpb 1.1026 single seed in PR #1440. EngramLite alone attributed -0.003 BPB delta.
@@ -2838,6 +2897,7 @@ expected = [
     "MOUSSE_MARKER",
     "MTP_MARKER",
     "MUONEQ_R_MARKER",
+    "NGRAM_BACKOFF_MARKER",
     "NGRAM_BIAS_MARKER",
     "NGR_LOG_FREQ_INV_MARKER",
     "NGRAM_GATE_MARKER",
