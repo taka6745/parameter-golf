@@ -209,6 +209,42 @@ verdict_reason: paper arXiv:2503.16672 demonstrates 2:4 sparsity for inference; 
 phd_defensible: yes — clear theory (intrinsic ReLU² sparsity matches 2:4 hardware pattern), clear ablation (mask on/off vs throughput), workshop paper on "exploiting activation function statistics for hardware-aware training"
 owner: F
 
+### NGR_interpolation_filter_byte_backoff
+added_utc: 20260408T0720Z
+source: C30#8 — Stanford NLP Chen-Goodman 1998 + byte-scale synthesis
+verdict: world-novel
+verdict_reason: Word-level Kneser-Ney is well-known. Byte-scale 3-layer interpolation with learned λ per context slice is unpublished. Backlog has KN_logit_bias as a separate variant; this is interpolation-filter not bias-shift. 0 GitHub hits for "byte-level kneser-ney interpolation".
+phd_defensible: yes — clear hypothesis (interpolation reduces variance on unigram tail), falsifiable (A/B test λ schedules), workshop-feasible
+win_mechanism: +0.22 bits/tok on byte-boundary reuse patterns trigrams miss
+owner: C
+
+### NGR_higher_order_skip_4gram_hadamard
+added_utc: 20260408T0720Z
+source: C30#8 — Infini-Gram arXiv:2401.17377 + CMU Hadamard hashing + Q-R skip-bigram extension
+verdict: world-novel
+verdict_reason: Infini-Gram scales to arbitrary n; Hadamard collision avoidance is in signal processing. Combining them as skip-4-gram hash for byte-LM is unpublished (skip-bigram exists in backlog L09 #2 but not skip-4-gram with hadamard).
+phd_defensible: yes — workshop-feasible (extend existing skip-bigram code +110 LOC)
+win_mechanism: +0.18 bits/tok on long-range deps; 4-gram captures reuse patterns at token distance 3
+owner: C
+
+### CMP_entro_llm_huffman_cabac_hybrid
+added_utc: 20260408T0720Z
+source: C30#8 — EntroLLM arXiv:2505.02380 (May 2025) + CABAC (H.264/H.265 video codec)
+verdict: world-novel
+verdict_reason: EntroLLM uses Huffman, not CABAC. CABAC is from video codecs, never applied to int6 GPTQ residuals in byte-LM. Backlog has neural-prior rANS (asymmetric_numeric_systems) but not CABAC variant.
+phd_defensible: yes — clear hypothesis (context-aware coding > static Gaussian prior), falsifiable, workshop-feasible
+win_mechanism: 1.3× entropy gain over static Huffman → 0.8-1.2 MB saved → -0.0035 BPB indirect
+owner: G/Mac
+
+### CMP_learned_elias_gamma_codes_rq
+added_utc: 20260408T0720Z
+source: C30#8 — Elias gamma universal codes (1950s, well-known theory) + RQ stage CDF training
+verdict: world-novel
+verdict_reason: Elias gamma is classical universal code. RQ exists in backlog (ERVQ arXiv:2410.12359). Combining learned Elias-gamma parameters per RQ stage is novel — no byte-LM paper applies stage-specific universal code CDFs to RQ.
+phd_defensible: yes — falsifiable (compare per-stage Elias-gamma vs fixed rANS), workshop-feasible
+win_mechanism: 0.6-1.0 MB saved on per-stage entropy code optimization → -0.003 BPB indirect
+owner: G/Mac
+
 ### TOK_hyperdimensional_byte_hdvector
 added_utc: 20260408T0750Z
 source: C30#7 cross-domain — Frady+Kleyko 2022 hyperdimensional computing
