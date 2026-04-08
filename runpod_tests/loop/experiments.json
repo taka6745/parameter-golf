@@ -1,5 +1,221 @@
 [
   {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L04_gated_attention_S2confirm_seed1337",
+    "pod_filter": [
+      "G"
+    ],
+    "USE_GATED_ATTENTION": "1",
+    "SEED": "1337"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L04_coprime_per_head_rope_S2confirm_seed42",
+    "pod_filter": [
+      "G"
+    ],
+    "USE_COPRIME_PER_HEAD_ROPE": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L05_parallel_residuals_S2confirm_seed42",
+    "pod_filter": [
+      "F"
+    ],
+    "USE_PARALLEL_RESIDUALS": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L06_asym_skip_init_S2confirm_seed1337",
+    "pod_filter": [
+      "E"
+    ],
+    "USE_ASYMMETRIC_SKIP_INIT": "1",
+    "SEED": "1337"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L06_ln_scale_S2confirm_seed42",
+    "pod_filter": [
+      "E"
+    ],
+    "USE_LN_SCALE": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L07_asym_label_smooth_S2confirm_seed1337",
+    "pod_filter": [
+      "F"
+    ],
+    "USE_ASYM_LABEL_SMOOTHING": "1",
+    "SEED": "1337"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L07_byte_weight_S2confirm_seed42",
+    "pod_filter": [
+      "F"
+    ],
+    "USE_BYTE_WEIGHT": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L08_per_proj_lr_split_S2confirm_seed1337",
+    "pod_filter": [
+      "B"
+    ],
+    "USE_PER_PROJ_LR_SPLIT": "1",
+    "SEED": "1337"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "L08_normuon_S2confirm_seed42",
+    "pod_filter": [
+      "B"
+    ],
+    "USE_NORMUON": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "65536",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1500",
+    "SKIP_FINAL_EVAL": "0",
+    "name": "STACK_INTERACTION_5way_S2_seed42",
+    "pod_filter": [
+      "B",
+      "C",
+      "E",
+      "F",
+      "G"
+    ],
+    "USE_GATED_ATTENTION": "1",
+    "USE_NORM_PCT_DROPOUT": "1",
+    "USE_ASYMMETRIC_SKIP_INIT": "1",
+    "USE_ASYM_LABEL_SMOOTHING": "1",
+    "USE_PER_PROJ_LR_SPLIT": "1",
+    "SEED": "42"
+  },
+  {
+    "USE_LEAKY_RELU": "1",
+    "USE_NGRAM_BIAS": "1",
+    "USE_COPRIME_STRIDE": "1",
+    "USE_ENGRAM_LITE": "1",
+    "TRAIN_SEQ_LEN": "1024",
+    "TRAIN_BATCH_TOKENS": "262144",
+    "NGRAM_W_BIGRAM": "0.25",
+    "NGRAM_W_TRIGRAM": "0.25",
+    "NGRAM_W_FOURGRAM": "0.20",
+    "MAX_WALLCLOCK_SECONDS": "1800",
+    "SKIP_FINAL_EVAL": "1",
+    "name": "G1_batch262k_seed42",
+    "pod_filter": [
+      "B"
+    ],
+    "SEED": "42"
+  },
+  {
     "name": "L10_qvdedup_seed42",
     "pod_filter": [
       "G"
