@@ -48,14 +48,14 @@
 | 8 | 20260409T0809Z | **E2 retry mid-flight, crushing it.** Past train phase: **69 steps in 109s (1581 ms/step)** = **1.85× speedup vs E1's 2933 ms/step**. tok/s **148K (vs E1's 80K)** = 1.88× throughput. Pre-quant post-EMA val_bpb **2.92033** (better than E1's 3.03 due to ~2× more steps). Peak VRAM 12,698 MiB (LOWER than E1's 19,308 — compile uses less memory). Currently in PreQ TTT (trainable 33.1M / frozen 2.89M, freeze_blocks=1). GPU 100% @ 348 W. No errors. PID 3856713 alive. | fire 9 (0826Z): expect E2 DONE. Parse quant val_bpb, verify gap still clean, confirm speedup, launch E3 (Shot 17 fuzzy LR bandit — needs coding) |
 | 9 | 20260409T0826Z | E2 still running. **PreQ TTT epoch 1/2 done in 769s, loss 4.5184**. Epoch 2 in progress. At batch_seqs=8 (auto-dropped), epochs are slower than the H100 reference (H100 was 8 epochs × 200s). Total TTT budget on 3090: ~25 min (~1540s). GPU 100% @ 348 W, 13.4 GB VRAM. No crashes. PID 3856713 alive. | fire 10 (0843Z): E2 should be DONE or near done (epoch 2 ends ~0838Z, then GPTQ + quant eval ~3 min → done by ~0842Z). Parse results, launch E3 |
 
-## Running tally
+## Running tally (1247Z — autonomous mode until 22:00Z / 8am AEST)
 
-- Pod M uptime: ~3h30m
-- Pod M spend: ~$1.61
-- Total commits by driver: 13 (fires 1-11)
-- ✅ **E1 DONE** @ 0709Z: Shot 0e fixed, quant gap 0.02206 BPB
-- ✅ **E2 DONE** @ 0842Z: **1.85× speedup** from torch.compile. Post-TTT unquant 1.425 matches H100 reference. **Quant-gap-when-TTT bug found** (1.866 BPB, submission blocker)
-- ❌ **E3 DONE (SKIP)** @ 0903Z: fuzzy LR bandit lost A/B vs E2 at matched steps
-- ⏸ **E4 deferred**: streaming KV eval, 250 LOC, eval-only — non-critical for fast-screen. Revisit later.
-- ⏸ **E5 pending_wip**: Parameter Banking + Parallel Muon, 200 LOC — needs dedicated fire.
-- 🔧 **Next priority**: investigate E2 quant gap bug (submission blocker), then E5, then champion run.
+- Pod M uptime: ~6h
+- Pod M spend: ~$2.76
+- Total commits: 20+
+- **Best so far: E8 at 1410 ms/step = 2.08× vs E1**
+- **Orchestrator running PID 3994567** queued 6 experiments: E8d → E6 → E10b → E11 → E7a → E12_stack
+- Metrics log at `/tmp/paramgolf_orchestrator.log` on pod
+- **Coded + staged** (not yet run): E6 Parallel Muon, E11 BF16 n-grams, E7a ngram bigram-only, E10a rotary fix (unblocks E10b max-autotune retry)
+- **Still to code**: E10 explicit CUDA graphs (200 LOC, risky), E7 fused n-gram Triton kernel (150 LOC)
+- **Target**: stretch 3-3.5× vs E1
