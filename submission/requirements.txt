@@ -1,0 +1,10 @@
+# paramgolf submission deps
+# torch is upgraded to 2.9.1+cu128 by setup.sh — pinning here for reference
+torch==2.9.1
+torchvision
+torchaudio
+sentencepiece>=0.2.0
+brotli>=1.1.0
+huggingface_hub>=0.20.0
+numpy
+# flash-attn-3 is pre-installed in the runpod/pytorch image and verified by setup.sh

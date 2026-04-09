@@ -1,21 +1,30 @@
-# PODS_SSH.md — RunPod test fleet (2026-04-09, Phase 1 H100)
+# PODS_SSH.md — RunPod test fleet (2026-04-09, post-Phase-1)
 
-**1 pod alive.** All 8 night-mode pods (B/C/E/F/G/H/I/J) were terminated at 2107Z after NIGHT_MODE ended. A new single H100 PCIe pod was spun up 2026-04-09 for Phase 1 target stack validation (narrow rule override, Phase 1 only).
+**0 pods alive.** Pod K (`9lfji49c6ngy9a`) was removed 2026-04-09 ~01:15Z after Phase 1 R1 completed (in-training val_bpb=1.7059, quantized=3.3166 — undertrained EMA, expected). Total Phase 1 burn: ~$4. Next spin-up will use the `submission/bootstrap.sh` runbook.
 
-## Pod K — paramgolf-phase1-h100 (NVIDIA H100 80GB PCIe) — PHASE 1 ACTIVE
+## Pod K — paramgolf-phase1-h100 (REMOVED 2026-04-09 0115Z)
 
-- **ID**: `9lfji49c6ngy9a`
-- **User hash**: `64410a72`
+- **ID**: `9lfji49c6ngy9a` (DELETED via `runpodctl remove pod`)
 - **GPU**: 1 × NVIDIA H100 PCIe 80GB HBM3
-- **Cost**: $2.39/h (secure cloud)
-- **Purpose**: Phase 1 — validate SP8192 + Score-First TTT + Parallel Residuals + AR-GPTQ + int6 + brotli target stack. Runs PR #1477 / #1019 code path as-is (requires FlashAttention 3, Hopper-only).
-- **SSH proxy**: `ssh 9lfji49c6ngy9a-64410a72@ssh.runpod.io -i ~/.ssh/id_ed25519`
-- **Image**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04` (will upgrade torch to 2.9.1 + install FA3 during bootstrap)
-- **Disk**: 100 GB container + 50 GB volume at `/workspace`
-- **Kill discipline**: terminated IMMEDIATELY after TARGET_STACK lands n=2 — no drift into Phase 2
-- **Hard cost cap**: $15 (~6 hours at $2.39/h)
-- **Plan reference**: `PHASE1_PLAN.md` at repo root
-- **Spin-up timestamp**: 2026-04-09 ~21:30Z
+- **Cost**: $2.39/h × ~1.7 h = ~$4.05 total burn
+- **Purpose** (was): validate train_gpt_phase1.py end-to-end on H100. Confirmed pipeline works via R1 (val_bpb 1.7059 in-training at step 129 / cap 600s).
+- **Lessons captured**: PHASE1_PLAN.md (SUBMISSION-RUN PRE-FLIGHT section), PHASE1_TROUBLESHOOTING.md (Fixes 1-8), PHASE1_NOVELTY_AUDIT.md
+- **Removal reason**: R1 confirmed the script runs end-to-end. Continuing on the pod = burning $$ on undertrained eval. Better to do code work on Mac (free) and spin a new pod once we have differentiated changes ready.
+
+## Next pod (TBD)
+
+When ready to dry-run the new submission stack:
+```bash
+# 1. Spin a fresh H100 pod via runpodctl
+runpodctl create pod --gpu "NVIDIA H100 PCIe" \
+    --image "runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04" \
+    --containerDiskInGb 100 --volumeInGb 50
+
+# 2. SSH to it, then run the one-command bootstrap
+curl -sL https://raw.githubusercontent.com/taka6745/paramgolf/main/submission/bootstrap.sh | bash
+```
+
+The bootstrap handles: torch upgrade, FA3 verify, JSONL stage on container disk (the 50 GB volume gotcha), tokenize, train, eval, serialize. ETA from cold pod to first val_bpb: ~50-80 min.
 
 ---
 
