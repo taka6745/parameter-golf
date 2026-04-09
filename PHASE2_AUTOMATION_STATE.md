@@ -16,7 +16,7 @@
 | E3 | Code + test Shot 17 (fuzzy LR bandit) | ❌ **done (SKIP)** | 3.21635 / 2.95165 | 1592 | `/tmp/paramgolf_bootstrap.log` | Bandit LOSS at matched steps vs E2 (step 30 +0.073, 50 +0.027, 60 +0.032 worse). High-LR arm explosion at step 2. Code works, patch skipped in champion stack. |
 | E4 | Code + test Shot 0b (streaming KV eval, ~250 LOC) | **deferred** | | | | **Non-critical for fast-screen** (eval speedup only — affects sliding eval which is disabled). Too big for single fire (250 LOC). Revisit after E5 + quant-gap bug. |
 | E5 | Code + test Shot 10 (Parameter Banking + Parallel Muon, ~200 LOC) | **pending_wip** | | | | Muon.step refactor to batch NS across same-shape params (~40-200 LOC depending on completeness). Needs dedicated 10-min fire. |
-| **E2b** | E2 quant gap fix — GPTQ calibration on val tokens (TTT preservation) | **running (warmup)** | — / — | — | `/tmp/paramgolf_bootstrap.log` | fix committed `f6a25dd`. PID 3884967. @ 0931Z in loop_warmup step 2/20, NLFI setup fired, GPU 100% @ 344W, 12.9 GB VRAM. Full training starts ~0932Z. ETA done ~0956Z. |
+| **E2b** | E2 quant gap fix — GPTQ calibration on val tokens (TTT preservation) | **running (PreQ TTT)** | 2.91941 / — | 1588 | `/tmp/paramgolf_bootstrap.log` | Train done: 69 steps @ 109.6s (matches E2), pre-quant 2.91941 (E2: 2.92033 — deterministic, same seed). Now in TTT epoch 1/2. GPTQ val calibration activates AFTER TTT. ETA done ~1000Z. |
 
 ## Fire log
 
