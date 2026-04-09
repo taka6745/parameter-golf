@@ -108,10 +108,25 @@ class CausalSelfAttention(nn.Module):
 		self.num_heads=num_heads;self.num_kv_heads=num_kv_heads;self.head_dim=dim//num_heads
 		if self.head_dim%2!=0:raise ValueError('head_dim must be even for RoPE')
 		kv_dim=self.num_kv_heads*self.head_dim;self.c_q=CastedLinear(dim,dim,bias=False);self.c_k=CastedLinear(dim,kv_dim,bias=False);self.c_v=CastedLinear(dim,kv_dim,bias=False);self.proj=CastedLinear(dim,dim,bias=False);self.proj._zero_init=True;self.q_gain=nn.Parameter(torch.full((num_heads,),qk_gain_init,dtype=torch.float32));self.rope_dims=0;self.rotary=Rotary(self.head_dim,base=rope_base,train_seq_len=train_seq_len);self.use_xsa=False
+		# GATED_ATTENTION (NIGHT_MODE n=5 confirmed-win, our champion lever)
+		# Per-head sigmoid gate over attention output. Gate = sigmoid(W_g @ x + b_g),
+		# init weight=0 + bias=2.94 → sigmoid(2.94)≈0.95 (near identity, room to learn).
+		# Multiplied per-head onto y after FA3 + XSA, before reshape.
+		# Cost: dim*num_heads + num_heads params/layer (4104 for our 512/8 shape).
+		# Enable via USE_GATED_ATTENTION=1.
+		self.gate_proj=CastedLinear(dim,num_heads,bias=True)
+		with torch.no_grad():
+			self.gate_proj.weight.zero_()
+			if self.gate_proj.bias is not None:self.gate_proj.bias.fill_(2.94)
+		self.use_gated_attention=bool(int(os.environ.get('USE_GATED_ATTENTION','0')))
 	def _xsa_efficient(self,y,v):B,T,H,D=y.shape;Hkv=v.size(-2);group=H//Hkv;y_g=y.reshape(B,T,Hkv,group,D);vn=F.normalize(v,dim=-1).unsqueeze(-2);proj=(y_g*vn).sum(dim=-1,keepdim=True)*vn;return(y_g-proj).reshape(B,T,H,D)
 	def forward(self,x):
 		bsz,seqlen,dim=x.shape;q=self.c_q(x).reshape(bsz,seqlen,self.num_heads,self.head_dim);k=self.c_k(x).reshape(bsz,seqlen,self.num_kv_heads,self.head_dim);v=self.c_v(x).reshape(bsz,seqlen,self.num_kv_heads,self.head_dim);q=F.rms_norm(q,(q.size(-1),));k=F.rms_norm(k,(k.size(-1),));cos,sin=self.rotary(seqlen,x.device,q.dtype);q=apply_rotary_emb(q,cos,sin,self.rope_dims);k=apply_rotary_emb(k,cos,sin,self.rope_dims);q=q*self.q_gain.to(dtype=q.dtype)[None,None,:,None];y=flash_attn_3_func(q,k,v,causal=True)
 		if self.use_xsa:y=self._xsa_efficient(y,v)
+		# GATED_ATTENTION apply: per-head sigmoid gate on attention output (after FA3+XSA, before reshape)
+		if self.use_gated_attention:
+			gate=torch.sigmoid(self.gate_proj(x).float()).to(dtype=y.dtype)  # (B, S, num_heads)
+			y=y*gate.unsqueeze(-1)  # broadcast over head_dim
 		y=y.reshape(bsz,seqlen,dim);return self.proj(y)
 class MLP(nn.Module):
 	def __init__(self,dim,mlp_mult):super().__init__();hidden=int(mlp_mult*dim);self.fc=CastedLinear(dim,hidden,bias=False);self.proj=CastedLinear(hidden,dim,bias=False);self.proj._zero_init=True
@@ -207,7 +222,15 @@ class Muon(torch.optim.Optimizer):
 					buf=state['momentum_buffer'];buf.mul_(momentum).add_(g)
 					if nesterov:g=g.add(buf,alpha=momentum)
 					if group.get('row_normalize',False):row_norms=g.float().norm(dim=-1,keepdim=True).clamp_min(1e-07);g=g/row_norms.to(g.dtype)
-					g=zeropower_via_newtonschulz5(g,steps=backend_steps);g*=max(1,g.size(0)/g.size(1))**.5;updates_flat[curr:curr+p.numel()]=g.reshape(-1)
+					g=zeropower_via_newtonschulz5(g,steps=backend_steps)
+					# NORMUON (NIGHT_MODE n=2 confirmed-win): per-row normalize AFTER Newton-Schulz.
+					# Distinct from row_normalize above (= MuonEq-R, normalize BEFORE NS). NorMuon
+					# enforces unit-norm rows on the orthogonalized output, tightening orthogonality.
+					# Mac SETUP §50 / LESSONS §35. Enable via USE_NORMUON=1.
+					if int(os.environ.get('USE_NORMUON','0')):
+						_post_norm=g.float().norm(dim=-1,keepdim=True).clamp(min=1e-8)
+						g=g/_post_norm.to(g.dtype)
+					g*=max(1,g.size(0)/g.size(1))**.5;updates_flat[curr:curr+p.numel()]=g.reshape(-1)
 				curr+=p.numel()
 			if distributed:dist.all_reduce(updates_flat,op=dist.ReduceOp.SUM)
 			wd=group.get('weight_decay',.0);curr=0

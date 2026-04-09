@@ -87,6 +87,19 @@ NUM_LOOPS="${NUM_LOOPS:-2}"
 #     Expected delta: -0.001 BPB.
 QK_GAIN_INIT="${QK_GAIN_INIT:-5}"
 
+# === Chunk 2: NIGHT_MODE wins (validated) ===
+# These are flagged ON by default — they're our champion stack from the overnight
+# n=2/n=3 cheap-pod validation campaign on the SP1024 base. Re-validating on
+# SP8192 is the dry-run's job.
+
+# gated_attention: per-head sigmoid gate over attention output, NeurIPS 2025.
+# NIGHT_MODE n=5 confirmed-win, our champion lever (1.3711 with LEGAL_TTT).
+USE_GATED_ATTENTION="${USE_GATED_ATTENTION:-1}"
+
+# NorMuon: per-row normalize AFTER Newton-Schulz (vs row_normalize which runs
+# BEFORE NS = MuonEq-R). NIGHT_MODE n=2 confirmed-win 1.40995, Mac SETUP §50.
+USE_NORMUON="${USE_NORMUON:-1}"
+
 # === DRY_RUN mode for fast smoke testing (60s wallclock, no TTT, no real eval) ===
 if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "[run] DRY_RUN=1 — 60s smoke test"
@@ -104,6 +117,8 @@ echo "  TRAIN_LOG_EVERY=$TRAIN_LOG_EVERY"
 echo "  VOCAB_SIZE=$VOCAB_SIZE"
 echo "  LOOP_START=$LOOP_START LOOP_END=$LOOP_END NUM_LOOPS=$NUM_LOOPS  (C2: 3-layer recurrence)"
 echo "  QK_GAIN_INIT=$QK_GAIN_INIT  (C3: bumped from 4)"
+echo "  USE_GATED_ATTENTION=$USE_GATED_ATTENTION  (NIGHT_MODE champion lever)"
+echo "  USE_NORMUON=$USE_NORMUON  (NIGHT_MODE n=2 confirmed)"
 
 LOG="logs/run_seed${SEED}_$(date -u +%Y%m%dT%H%M%SZ).log"
 
@@ -122,6 +137,8 @@ LOOP_START="$LOOP_START" \
 LOOP_END="$LOOP_END" \
 NUM_LOOPS="$NUM_LOOPS" \
 QK_GAIN_INIT="$QK_GAIN_INIT" \
+USE_GATED_ATTENTION="$USE_GATED_ATTENTION" \
+USE_NORMUON="$USE_NORMUON" \
 python3 -u submission/train.py 2>&1 | tee "$LOG"
 
 echo
