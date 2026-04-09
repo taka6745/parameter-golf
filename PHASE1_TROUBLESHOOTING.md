@@ -133,6 +133,15 @@ ln -sfn /root/paramgolf_bigdata/docs_selected.jsonl data/datasets/docs_selected.
 - **PERMANENT** — checked into repo. The script bug is also fixable upstream
   (skip unlink when source == destination), TODO add a one-line guard.
 
+## 2026-04-09 00:08Z — Cron fire 1: tokenize alive, 14 train + 1 val shard, 14 min elapsed
+
+- PID 2280 alive, 2h27m cumulative CPU (~10 cores worth across the elapsed 14 min)
+- Shards: 14 train + 1 val written, train_000013 latest
+- Sustained rate: ~1 train shard / min (200 MB / 100 M tokens each)
+- GPU: 0% (idle, CPU tokenize as expected)
+- Disk: / at 48%, /workspace volume not under pressure
+- ETA unchanged: ~120 train shards → done ~01:54Z = 11:54 AEST
+
 ## 2026-04-08 23:54Z — Tokenize launched, RUNNING ✓
 
 - `bash runpod_tests/loop/phase1_tokenize.sh` from /workspace/paramgolf launched
