@@ -62,15 +62,25 @@
 
 ## Orchestrator protocol (for future cron fires)
 
-Pod runs `/tmp/paramgolf_orchestrator.sh` (PID from 1247Z launch). Each fire should:
-1. Check `/tmp/paramgolf_orchestrator.log` on pod for `[NAME] done` lines
-2. Update PHASE2_RESULTS.md with completed experiments
-3. If orchestrator is STILL RUNNING, wait
-4. If orchestrator FINISHED, code the next wave and launch a new orchestrator
+**WAVE 1** (`/tmp/paramgolf_orchestrator.sh`, PID 3994567, launched 1247Z):
+- ✅ E8d (wash), ✅ E6 (+3% → 2.14×), ❌ E10b (crash), ✅ E11 (same as E6, bf16 verified)
+- 🚀 E7a running (bigram only)
+- ⏳ E12_stack queued (bf16 + bigger batch + parallel muon)
 
-**Wave 2 candidates** to add in next orchestrator:
-- E13: NUM_LAYERS=8 (remove 3 of 11 blocks, quality hit for ~25% speed)
-- E14: MLP_MULT=2 (smaller FFN, ~20% speed expected)
-- E15: TRAIN_SEQ_LEN=1024 (more steps per wallclock, less context)
-- E16: champion stack = best of E8+E4b+E5+E6+E11 combined
-- E17: bigger TRAIN_BATCH_TOKENS now that bf16 tables free 750 MB (try 262144 or 327680)
+**WAVE 2** (`/tmp/paramgolf_orchestrator_wave2.sh`, PID 4050718, queued 1346Z):
+- Waits for wave 1 to exit, then runs:
+- E13_layers8 (NUM_LAYERS=8)
+- E14_mlp2 (MLP_MULT=2)
+- E15_seq1024 (TRAIN_SEQ_LEN=1024)
+- E13b_layers9 (NUM_LAYERS=9, milder)
+- E16_champion (NUM_LAYERS=9 + bf16 + parallel muon)
+- E17_champion_lite (NUM_LAYERS=8 + MLP_MULT=3 + parallel muon)
+
+All wave 2 experiments are env-var-only; no new code needed. Per-experiment runtime ~7-15 min. Wave 2 total ~60-90 min.
+
+**Key insight from wave 1**: 3090 is **compute-bound**. Bigger batches (E8d), bf16 (E11), coord descent (E8c) don't help speed. Real wins come from **cutting compute** (NUM_LOOPS in E8, Parallel Muon in E6) or **kernel fusion** (max-autotune in E4b). Wave 2 tests aggressive compute-cutting via smaller model dimensions.
+
+**WAVE 3 plan** (after wave 2 results, for future cron fires):
+- Stack the best wave 2 winner with E6 + E8 + E4b config into a true champion run
+- Try explicit CUDA graph capture if we have time (requires fixing remaining rotary/state issues)
+- Possibly try Triton fused n-gram kernel if E7a shows lookups are a bottleneck
