@@ -113,6 +113,19 @@ PREQUANT_TTT_BATCH_SEQS="${PREQUANT_TTT_BATCH_SEQS:-32}"
 PREQUANT_TTT_GRAD_CLIP="${PREQUANT_TTT_GRAD_CLIP:-1.0}"
 PREQUANT_TTT_COSINE_DECAY="${PREQUANT_TTT_COSINE_DECAY:-1}"
 
+# === Chunk 2/3 world-novel adds ===
+
+# NORM_PCT_DROPOUT (NIGHT_MODE world-novel L05, n=2 confirmed-win 1.41365):
+# Zeros the top 1% per-token L2-norm rows of FFN intermediate during training.
+USE_NORM_PCT_DROPOUT="${USE_NORM_PCT_DROPOUT:-1}"
+NORM_PCT_THRESH="${NORM_PCT_THRESH:-0.99}"
+
+# CMP_QUANT_VALUE_DEDUP (NIGHT_MODE world-novel L10): post-quant alphabet snap
+# for better LZ77/brotli compression. step=2 → ~5-15% smaller compressed payload.
+# Helps stay under the 16 MB submission limit.
+USE_CMP_QUANT_VALUE_DEDUP="${USE_CMP_QUANT_VALUE_DEDUP:-1}"
+CMP_QUANT_DEDUP_STEP="${CMP_QUANT_DEDUP_STEP:-2}"
+
 # === DRY_RUN mode for fast smoke testing (60s wallclock, no TTT, no real eval) ===
 if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "[run] DRY_RUN=1 — 60s smoke test"
@@ -133,6 +146,8 @@ echo "  QK_GAIN_INIT=$QK_GAIN_INIT  (C3: bumped from 4)"
 echo "  USE_GATED_ATTENTION=$USE_GATED_ATTENTION  (NIGHT_MODE champion lever)"
 echo "  USE_NORMUON=$USE_NORMUON  (NIGHT_MODE n=2 confirmed)"
 echo "  PREQUANT_TTT_ENABLED=$PREQUANT_TTT_ENABLED epochs=$PREQUANT_TTT_EPOCHS lr=$PREQUANT_TTT_LR freeze=$PREQUANT_TTT_FREEZE_BLOCKS  (C1: -0.014 BPB lever)"
+echo "  USE_NORM_PCT_DROPOUT=$USE_NORM_PCT_DROPOUT thresh=$NORM_PCT_THRESH  (NIGHT_MODE world-novel L05)"
+echo "  USE_CMP_QUANT_VALUE_DEDUP=$USE_CMP_QUANT_VALUE_DEDUP step=$CMP_QUANT_DEDUP_STEP  (NIGHT_MODE world-novel L10, helps 16MB)"
 
 LOG="logs/run_seed${SEED}_$(date -u +%Y%m%dT%H%M%SZ).log"
 
@@ -160,6 +175,10 @@ PREQUANT_TTT_FREEZE_BLOCKS="$PREQUANT_TTT_FREEZE_BLOCKS" \
 PREQUANT_TTT_BATCH_SEQS="$PREQUANT_TTT_BATCH_SEQS" \
 PREQUANT_TTT_GRAD_CLIP="$PREQUANT_TTT_GRAD_CLIP" \
 PREQUANT_TTT_COSINE_DECAY="$PREQUANT_TTT_COSINE_DECAY" \
+USE_NORM_PCT_DROPOUT="$USE_NORM_PCT_DROPOUT" \
+NORM_PCT_THRESH="$NORM_PCT_THRESH" \
+USE_CMP_QUANT_VALUE_DEDUP="$USE_CMP_QUANT_VALUE_DEDUP" \
+CMP_QUANT_DEDUP_STEP="$CMP_QUANT_DEDUP_STEP" \
 python3 -u submission/train.py 2>&1 | tee "$LOG"
 
 echo

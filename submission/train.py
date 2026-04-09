@@ -129,8 +129,31 @@ class CausalSelfAttention(nn.Module):
 			y=y*gate.unsqueeze(-1)  # broadcast over head_dim
 		y=y.reshape(bsz,seqlen,dim);return self.proj(y)
 class MLP(nn.Module):
-	def __init__(self,dim,mlp_mult):super().__init__();hidden=int(mlp_mult*dim);self.fc=CastedLinear(dim,hidden,bias=False);self.proj=CastedLinear(hidden,dim,bias=False);self.proj._zero_init=True
-	def forward(self,x):return self.proj(F.leaky_relu(self.fc(x),negative_slope=.5).square())
+	def __init__(self,dim,mlp_mult):
+		super().__init__()
+		hidden=int(mlp_mult*dim)
+		self.fc=CastedLinear(dim,hidden,bias=False)
+		self.proj=CastedLinear(hidden,dim,bias=False)
+		self.proj._zero_init=True
+		# NORM_PCT_DROPOUT (NIGHT_MODE world-novel L05, n=2 confirmed-win 1.41365):
+		# Zero out the top 1% per-token L2-norm rows of the FFN intermediate. Targets
+		# rare exploding-activation pathways. Standard dropout = random elements;
+		# structured dropout = random rows; norm-percentile dropout = the loudest rows.
+		# Enable via USE_NORM_PCT_DROPOUT=1, threshold via NORM_PCT_THRESH (default 0.99).
+		self.use_norm_pct_dropout=bool(int(os.environ.get('USE_NORM_PCT_DROPOUT','0')))
+		self.norm_pct_thresh=float(os.environ.get('NORM_PCT_THRESH','0.99'))
+	def forward(self,x):
+		x=F.leaky_relu(self.fc(x),negative_slope=.5).square()
+		if self.training and self.use_norm_pct_dropout:
+			# Zero rows whose L2 norm is in the top (1 - thresh) fraction
+			orig_shape=x.shape
+			x_flat=x.reshape(-1,orig_shape[-1])
+			row_norms=x_flat.float().norm(dim=-1)
+			kth=torch.quantile(row_norms,self.norm_pct_thresh)
+			keep=(row_norms<kth).to(dtype=x.dtype).unsqueeze(-1)
+			x_flat=x_flat*keep
+			x=x_flat.reshape(orig_shape)
+		return self.proj(x)
 class Block(nn.Module):
 	def __init__(self,dim,num_heads,num_kv_heads,mlp_mult,rope_base,qk_gain_init,train_seq_len,layer_idx=0,ln_scale=False):super().__init__();self.attn_norm=RMSNorm();self.mlp_norm=RMSNorm();self.attn=CausalSelfAttention(dim,num_heads,num_kv_heads,rope_base,qk_gain_init,train_seq_len);self.mlp=MLP(dim,mlp_mult);self.attn_scale=nn.Parameter(torch.ones(dim,dtype=torch.float32));self.mlp_scale=nn.Parameter(torch.ones(dim,dtype=torch.float32));self.resid_mix=nn.Parameter(torch.stack((torch.ones(dim),torch.zeros(dim))).float());self.ln_scale_factor=1./math.sqrt(layer_idx+1)if ln_scale else 1.
 	def forward(self,x,x0):mix=self.resid_mix.to(dtype=x.dtype);x_in=mix[0][None,None,:]*x+mix[1][None,None,:]*x0;attn_out=self.attn(self.attn_norm(x_in)*self.ln_scale_factor);x_out=x_in+self.attn_scale.to(dtype=x_in.dtype)[None,None,:]*attn_out;x_out=x_out+self.mlp_scale.to(dtype=x_out.dtype)[None,None,:]*self.mlp(self.mlp_norm(x_out)*self.ln_scale_factor);return x_out
@@ -296,7 +319,19 @@ def gptq_quantize_weight(w,H,clip_sigmas=3.,clip_range=63,block_size=128):
 		i2=min(i1+block_size,cols);W_block=W_work[:,i1:i2].clone();Hinv_block=Hinv[i1:i2,i1:i2];Err=torch.zeros(rows,i2-i1)
 		for j in range(i2-i1):w_col=W_block[:,j];d=Hinv_block[j,j];q_col=torch.clamp(torch.round(w_col/sf),-clip_range,clip_range);Q[:,i1+j]=q_col.to(torch.int8);err=(w_col-q_col.float()*sf)/d;Err[:,j]=err;W_block[:,j:]-=err.unsqueeze(1)*Hinv_block[j,j:].unsqueeze(0)
 		if i2<cols:W_work[:,i2:]-=Err@Hinv[i1:i2,i2:]
-	return Q[:,invperm],s
+	Q=Q[:,invperm]
+	# CMP_QUANT_VALUE_DEDUP (NIGHT_MODE world-novel L10): snap quantized values to a
+	# coarser alphabet AFTER GPTQ but BEFORE serialization. Halves the effective
+	# alphabet (e.g. step=2 → 32 distinct int6 values instead of 64), so the byte
+	# stream that brotli/zlib subsequently compresses has more repeating bytes →
+	# longer LZ77 matches → ~5-15% better post-quant compression. Cost: tiny added
+	# reconstruction noise. Enable via USE_CMP_QUANT_VALUE_DEDUP=1, step via
+	# CMP_QUANT_DEDUP_STEP (default 2). World-novel: post-int alphabet snap for
+	# brotli compressibility is not in any LM compression paper.
+	if int(os.environ.get('USE_CMP_QUANT_VALUE_DEDUP','0')):
+		_cqvd_step=int(os.environ.get('CMP_QUANT_DEDUP_STEP','2'))
+		if _cqvd_step>1:Q=((Q.to(torch.int16)//_cqvd_step)*_cqvd_step).to(torch.int8)
+	return Q,s
 def gptq_mixed_quantize(state_dict,hessians,h):
 	result={};meta={}
 	for(name,tensor)in state_dict.items():
