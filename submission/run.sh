@@ -73,6 +73,20 @@ VOCAB_SIZE="${VOCAB_SIZE:-8192}"
 TORCH_COMPILE_DISABLE="${TORCH_COMPILE_DISABLE:-1}"
 TORCHDYNAMO_DISABLE="${TORCHDYNAMO_DISABLE:-1}"
 
+# === Comp frontier env-var bumps (chunk 1, from PHASE1_NOVELTY_AUDIT.md) ===
+# C2: 3-layer depth recurrence (was loop_start=4, loop_end=5 → 2 looped layers)
+#     PR #1485 / #1471 / #1437 use loop_start=3, loop_end=5 → 3 looped layers,
+#     each looped num_loops=2 times for ~17 virtual layers from 11 physical.
+#     Expected delta: -0.005 to -0.01 BPB.
+LOOP_START="${LOOP_START:-3}"
+LOOP_END="${LOOP_END:-5}"
+NUM_LOOPS="${NUM_LOOPS:-2}"
+
+# C3: QK_GAIN_INIT bump 4 → 5. PR #1413/#1423/#1485/#1437/#1351/#1408 are at 5.0;
+#     PR #1482 is at 5.25. The default 4 in PR #1477 is below the leaderboard curve.
+#     Expected delta: -0.001 BPB.
+QK_GAIN_INIT="${QK_GAIN_INIT:-5}"
+
 # === DRY_RUN mode for fast smoke testing (60s wallclock, no TTT, no real eval) ===
 if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "[run] DRY_RUN=1 — 60s smoke test"
@@ -88,6 +102,8 @@ echo "  TORCH_COMPILE_DISABLE=$TORCH_COMPILE_DISABLE"
 echo "  TORCHDYNAMO_DISABLE=$TORCHDYNAMO_DISABLE"
 echo "  TRAIN_LOG_EVERY=$TRAIN_LOG_EVERY"
 echo "  VOCAB_SIZE=$VOCAB_SIZE"
+echo "  LOOP_START=$LOOP_START LOOP_END=$LOOP_END NUM_LOOPS=$NUM_LOOPS  (C2: 3-layer recurrence)"
+echo "  QK_GAIN_INIT=$QK_GAIN_INIT  (C3: bumped from 4)"
 
 LOG="logs/run_seed${SEED}_$(date -u +%Y%m%dT%H%M%SZ).log"
 
@@ -102,6 +118,10 @@ TORCHDYNAMO_DISABLE="$TORCHDYNAMO_DISABLE" \
 TRAIN_LOG_EVERY="$TRAIN_LOG_EVERY" \
 DATA_DIR="$DATA_DIR" \
 VOCAB_SIZE="$VOCAB_SIZE" \
+LOOP_START="$LOOP_START" \
+LOOP_END="$LOOP_END" \
+NUM_LOOPS="$NUM_LOOPS" \
+QK_GAIN_INIT="$QK_GAIN_INIT" \
 python3 -u submission/train.py 2>&1 | tee "$LOG"
 
 echo
