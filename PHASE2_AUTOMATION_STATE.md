@@ -14,8 +14,9 @@
 | **E1** | Shot 0e validation: Phase 1 stack + fix, `bash run.sh` direct, no compile, TTT=0 | ✅ **done** | 3.03477 / **3.05683** | **2933** | `phase2/run_logs/e1_crash_0644Z.log` (initial crash) | **Shot 0e FIXED** — quant gap 0.02206 BPB (was -2.62). Artifact 11.1 MB ✅. 37 steps in 120s cap. |
 | E2 | Phase 2 Shot 1 (torch.compile on) via phase2/run.sh | ✅ **done** | 2.92033 post-EMA / **1.42528 post-TTT** / 3.29089 quant ⚠️ | **1581** (1.85× vs E1) | `/tmp/paramgolf_bootstrap.log` | Speed win ✅. **New bug**: quant gap 1.866 BPB when TTT on (vs E1's 0.022). Post-TTT unquant 1.425 matches H100 reference — TTT works. Does not block E3-E5 fast-screen (TTT=0). |
 | E3 | Code + test Shot 17 (fuzzy LR bandit) | ❌ **done (SKIP)** | 3.21635 / 2.95165 | 1592 | `/tmp/paramgolf_bootstrap.log` | Bandit LOSS at matched steps vs E2 (step 30 +0.073, 50 +0.027, 60 +0.032 worse). High-LR arm explosion at step 2. Code works, patch skipped in champion stack. |
-| E4 | Code + test Shot 0b (streaming KV eval, ~250 LOC) | pending | | | | needs coding. **Fast-screen mode**: eval-only shot — run new eval path on E1/E2 artifact, compare val_bpb to baseline eval |
-| E5 | Code + test Shot 10 (Parameter Banking + Parallel Muon, ~200 LOC) | pending | | | | needs coding. **Fast-screen mode**: `PREQUANT_TTT_EPOCHS=0`, `MAX_WALLCLOCK_SECONDS=120`. Goal: ms/step delta + peak VRAM delta |
+| E4 | Code + test Shot 0b (streaming KV eval, ~250 LOC) | **deferred** | | | | **Non-critical for fast-screen** (eval speedup only — affects sliding eval which is disabled). Too big for single fire (250 LOC). Revisit after E5 + quant-gap bug. |
+| E5 | Code + test Shot 10 (Parameter Banking + Parallel Muon, ~200 LOC) | **pending_wip** | | | | Muon.step refactor to batch NS across same-shape params (~40-200 LOC depending on completeness). Needs dedicated 10-min fire. |
+| **BUG** | E2 quant gap 1.866 BPB when TTT on (vs E1's 0.022 without TTT) | **investigate** | | | `phase2/run_logs/e2_0752Z.log` on pod | Submission blocker. Shot 0e fix works (logs confirm "restored multipliers from state_dict"). Possible cause: GPTQ calibrating on train data but post-TTT weights are val-adapted — distribution mismatch. Or: TTT modifies n-gram tables via gradients that don't survive int6 quantization. |
 
 ## Fire log
 
@@ -33,9 +34,12 @@
 
 ## Running tally
 
-- Pod M uptime: ~145 min (~2h25m)
-- Pod M spend: ~$1.11
-- Total commits by driver: 10 (fires 1-8 + refactor)
-- **E1 DONE** @ 0709Z: Shot 0e fixed, quant gap 0.02206 BPB ✅
-- **E2 RETRY RUNNING** @ 0752Z: after `.item()` refactor, now in PreQ TTT. Interim: ms/step **1581 (1.85× speedup)**, pre-quant val_bpb 2.92. Expected done ~0820-0830Z.
-- **Headline speedup**: 1.85× from torch.compile alone (before FA3, CUDAGraph, fused ngram, etc)
+- Pod M uptime: ~3h30m
+- Pod M spend: ~$1.61
+- Total commits by driver: 13 (fires 1-11)
+- ✅ **E1 DONE** @ 0709Z: Shot 0e fixed, quant gap 0.02206 BPB
+- ✅ **E2 DONE** @ 0842Z: **1.85× speedup** from torch.compile. Post-TTT unquant 1.425 matches H100 reference. **Quant-gap-when-TTT bug found** (1.866 BPB, submission blocker)
+- ❌ **E3 DONE (SKIP)** @ 0903Z: fuzzy LR bandit lost A/B vs E2 at matched steps
+- ⏸ **E4 deferred**: streaming KV eval, 250 LOC, eval-only — non-critical for fast-screen. Revisit later.
+- ⏸ **E5 pending_wip**: Parameter Banking + Parallel Muon, 200 LOC — needs dedicated fire.
+- 🔧 **Next priority**: investigate E2 quant gap bug (submission blocker), then E5, then champion run.
