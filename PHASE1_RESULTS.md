@@ -11,7 +11,17 @@ timestamp. Append only.
 
 | shot | env | wallclock | val_bpb | artifact_bytes | ms/step | status | utc |
 |---|---|---|---|---|---|---|---|
-| (none yet) | | | | | | pre-tokenize | |
+| **R1 in-training** | seed=42, TTT=1, MAX_WALLCLOCK_SECONDS=600, TORCH_COMPILE_DISABLE=1 | 593086 ms (cap hit, 129/20000 steps) | **1.7059** (in-training) | n/a (no quant yet) | ~4400 ms/step (eager mode, no compile) | partial: train phase only | 20260409T0033Z |
+| **R1 quantized** | same as R1 + EMA 0.997 + GPTQ int6 + brotli-11 | n/a (post-train) | **3.3166** ★ EMA junk — only 129 steps | **16041642** (41 KB OVER 16 MB limit) | n/a | **REJECTED — over size limit + undertrained EMA** | 20260409T0050Z |
+
+## R1 analysis
+
+- The 1.7059 in-training number proves the pipeline works (model is learning).
+- The 3.3166 quantized number is junk because EMA decay 0.997 needs ~1000+ steps to forget the random init; we only had 129 steps.
+- The 16.04 MB submission size is 41 KB over the 16 MB limit — would be rejected.
+- Both issues resolve with longer training: more steps → EMA converges → smaller delta-from-fp32 → quantization works correctly → both val_bpb and size land in spec.
+- **Action**: R3 (next) needs `MAX_WALLCLOCK_SECONDS >= 3000` so EMA can converge. Don't worry about size at this stage — that's a quantization-quality issue downstream of training.
+
 
 ---
 

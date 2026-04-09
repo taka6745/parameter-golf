@@ -161,6 +161,25 @@ ln -sfn /root/paramgolf_bigdata/docs_selected.jsonl data/datasets/docs_selected.
 - Also discovered: phase1_launch.sh's smoke `grep -q "val_loss"` matches the
   env var dump. TODO fix to grep for `val_loss:` (with colon).
 
+## 2026-04-09 01:09Z — Cron fire 5: R1 train phase done, stuck in sliding-window eval
+
+- R1 PID 598575 alive 36 min elapsed (started 00:33Z), GPU 32% / 247W / 61 GB
+- Train phase finished cleanly: 129 steps, in-training val_bpb=**1.7059**, stopped
+  at wallclock cap 593086ms
+- EMA + GPTQ phase done: pre-quant post-EMA val_bpb=3.3099 (EMA is junk because
+  decay 0.997 needs ~1000+ steps; we only had 129)
+- Quantized + brotli: **15990973 bytes** model + 50669 bytes code = **16041642 bytes
+  = 16.04 MB**, **41 KB OVER the 16 MB limit**. Submission would be rejected.
+- Quantized val_bpb=**3.3166** (matches the bad EMA — undertrained)
+- Now stuck in `eval_val_sliding(stride=64)` — eager mode (compile disabled), ~33
+  min for 40M val tokens. Then `eval_val_sliding_ttt` for another ~30 min.
+- Total ETA to finish R1 = ~11:54 AEST, right at deadline. The remaining eval
+  phases will produce numbers but they're on the same junk EMA weights — no
+  signal worth waiting for.
+- **Decision blocker**: should we kill R1 eval and launch R3 (longer wallclock so
+  EMA converges)? Waiting on user direction. Per cron rule "don't kill the pod
+  yourself" — I'm leaving R1 alive but not launching anything new this fire.
+
 ## 2026-04-09 00:47Z — Cron fire 4: Shot 1 deep in training, loss 9.01 → 4.50
 
 - Training producing real output! Initial untrained val_bpb=3.4877 (sanity).
