@@ -97,6 +97,14 @@ All wave 2 experiments are env-var-only; no new code needed. Per-experiment runt
 
 Pod returned "container not found" — likely RunPod reclaim or billing issue. Total uptime ~14h45m. Total spend estimate: ~$6.80. All committed results are safe in git. CHAMP_D alone is sufficient to declare the submission path unblocked.
 
+## Pod N: paramgolf-ttt-int8 (A6000 48GB, $0.33/h, eu-cz-1)
+
+Spun up 23:11Z to test CHAMP_F: CHAMP_D config + Pre-Quant TTT 8 epochs (the missing TTT validation). A6000 48GB chosen because 3090 was sold out, and the extra VRAM eliminates TTT OOM concerns.
+
+**CHAMP_F monitor cron**: `37ff8ea1` (9,26,43 schedule)
+
+**23:46Z fire**: bootstrap-data phase, sentencepiece training in progress (no cached model on fresh pod), 0/3 ngram files yet. ETA to CHAMP_F training start ~00:25Z. Spend ~$0.17.
+
 **WAVE 3 plan** (after wave 2 results, for future cron fires):
 - Stack the best wave 2 winner with E6 + E8 + E4b config into a true champion run
 - Try explicit CUDA graph capture if we have time (requires fixing remaining rotary/state issues)
