@@ -2,13 +2,63 @@
 
 Written 2026-04-09 after Phase 1 dry run identified the speed problem. Owner: Claude + Takoda.
 
+## 🚨 URGENT: Shot 0e — Fix NGR_LOG_FREQ_INV serialization bug (BEFORE any speed work)
+
+**Discovered 2026-04-09 from Pod L Phase 1 dry run**. This is a **CORRECTNESS bug**, not a speed bug, but it must land before Phase 2 speed work because the speed work's val_bpb verification invariant (ε ≤ 0.005 drift) can't be measured against a broken baseline.
+
+**Symptom**:
+```
+post-prequant-ttt   val_bpb: 1.24108   ← model looks GREAT unquantized
+quantized           val_bpb: 3.86174   ← quantized is DESTROYED (-2.62 BPB gap!)
+```
+
+Normal GPTQ int6 quant gap is 0.005-0.02 BPB. We're seeing **2.62 BPB**. Something is wrong.
+
+**Root cause**: The n-gram table buffers in `GPT.__init__` are registered with `persistent=False` so they don't bloat the submission state_dict. But **NGR_LOG_FREQ_INV mutates them in place on first forward** (multiplies every bucket value by `1/log(2+count)`). The flow breaks on serialize → deserialize:
+
+1. Training runs → `_bigram_tab`, `_trigram_tab`, `_fourgram_tab` get MUTATED in place
+2. `serialize()` saves `base_model.state_dict()` → **mutated tables NOT included** (persistent=False)
+3. `deserialize()` creates a fresh `GPT(h)` → `__init__` reloads tables from disk → **UNMUTATED**
+4. Eval runs with the original-freq tables, but the model was trained expecting the mutated-freq ones → **massive mismatch**
+
+CMP_QUANT_VALUE_DEDUP probably adds a small amount too, but the primary culprit is NGR_LOG_FREQ_INV losing its state on save.
+
+**Fix options (ranked)**:
+
+1. **Option A — save multipliers separately, re-apply on load** (best, ~30 LOC, world-novel claim survives):
+   - Compute the multipliers once on first forward (current behavior)
+   - Also store them in `self._nlfi_bigram_mult`, `_nlfi_trigram_mult`, `_nlfi_fourgram_mult` as `persistent=True` small tensors (shape `[16384]` fp32 = 64 KB each, ~200 KB total, fits the 16 MB cap easily)
+   - On `deserialize()`, the `__init__` reloads the tables fresh, THEN the state_dict load restores the multipliers, THEN a new helper method `_nlfi_reapply_if_needed()` re-multiplies the tables using the saved multipliers
+   - Total submission size impact: +200 KB. Still well under 16 MB cap.
+   - The world-novel L09 claim survives: we still do inverse-log-frequency bucket suppression, just with the multipliers persisted so quantized eval matches trained eval.
+
+2. **Option B — disable NGR_LOG_FREQ_INV for the submission path** (~1 LOC):
+   - Set `USE_NGR_LOG_FREQ_INV=0` in `submission/run.sh` by default
+   - Keep the code in place so the patch can be re-enabled in research runs
+   - LOSES the world-novel claim but guarantees quant gap recovers
+
+3. **Option C — disable both NGR_LOG_FREQ_INV AND CMP_QUANT_VALUE_DEDUP**, re-run, confirm baseline (~2 LOC):
+   - Pure diagnostic run to prove the two patches are the culprits
+   - Expected: quant gap drops to ~0.05 BPB, val_bpb lands around 1.30 (comp-parity region)
+   - USE FIRST as a diagnostic, THEN pick A or B for the real fix
+
+**Implementation plan**:
+
+1. First: Option C diagnostic run (2 env vars flipped, re-run on a fresh cheap pod, measure the quant gap)
+2. If C confirms: Option A (save multipliers, ~30 LOC) — keeps the world-novel claim
+3. If A is too risky under time pressure: Option B fallback
+
+**This shot blocks**: all downstream Phase 2 speed work, because the val_bpb invariant (ε ≤ 0.005 drift vs Phase 1 baseline) can't be measured against a 3.86 baseline. We need a clean baseline first.
+
+---
+
 ## TL;DR
 
 - **Same model as Phase 1.** Architecture, hyperparams, env vars, all 10 patches — unchanged.
 - **Different implementation**: torch.compile, FA3, custom kernels, CUDAGraph. Same math, faster execution.
 - **The win mechanism**: speedup → more training steps in the comp's 600s wallclock budget → lower train_loss → lower val_bpb. Phase 1 hit 180 steps; with 5× speedup we'd hit ~900, with 15× → ~2700.
 - **Hardware**: cheap 3090/4070 Ti pods, NOT H100. The H100 rule resumes after Phase 1 ends.
-- **Gate**: Phase 2 can start once Phase 1 has produced ANY end-to-end val_bpb (proves the stack composes).
+- **Gate**: Phase 2 can start once **Shot 0e** (NGR_LOG_FREQ_INV serialization fix) has landed AND Phase 1 has produced a clean baseline val_bpb (≤ ~1.30 expected after the fix).
 
 ---
 

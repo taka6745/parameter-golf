@@ -30,6 +30,13 @@ commit WIP and exit.
 4. Read CLAUDE.md for hard rules
 
 ## Shot priority list (work in this order)
+0. **Shot 0e — NGR_LOG_FREQ_INV serialization fix (URGENT CORRECTNESS BUG)**
+   - Discovered from Pod L Phase 1 dry run: post-prequant-ttt val_bpb=1.241 but quantized=3.862 (-2.62 BPB gap!)
+   - Root cause: n-gram tables mutated by NGR_LOG_FREQ_INV but buffers are persistent=False, so mutated state is lost on serialize → deserialize → eval runs with unmutated tables → massive mismatch
+   - Fix: Option A from PHASE2_PLAN.md "Shot 0e" section — save the 3 multiplier tensors (shape [16384] fp32 each = 200 KB total) as persistent buffers, re-apply on deserialize via new _nlfi_reapply_if_needed() helper
+   - ~30 LOC in submission/train.py (GPT.__init__ + new method + forward_logits + deserialize path)
+   - BLOCKS all downstream Phase 2 speed shots (can't measure ε drift against broken baseline)
+   - Do as a DIAGNOSTIC first: flip USE_NGR_LOG_FREQ_INV=0 + USE_CMP_QUANT_VALUE_DEDUP=0 in run.sh, run once on cheap pod, measure clean quant gap. Then apply the real fix.
 1. Shot 17 — Fuzzy LR bandit per microbatch (smallest, ~4h human = 1 fire)
    - Add env var FUZZY_LR_BANDIT_ENABLED=1
    - In step_fn, sample lr from {0.5x, 1x, 2x} * base_lr with online Thompson sampling
