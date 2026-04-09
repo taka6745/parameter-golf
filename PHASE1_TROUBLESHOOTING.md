@@ -133,6 +133,48 @@ ln -sfn /root/paramgolf_bigdata/docs_selected.jsonl data/datasets/docs_selected.
 - **PERMANENT** — checked into repo. The script bug is also fixable upstream
   (skip unlink when source == destination), TODO add a one-line guard.
 
+## 2026-04-09 00:33Z — FIX 8: torch.compile killed Shot 1 progress (PERMANENT)
+
+- Smoke test PID 461291 spent ~5 min in torch.compile / TorchInductor without
+  reaching a single training step. The bash `timeout 180` killed it just before
+  the wallclock cap. The smoke log only had env-var dumps and `gptq:reserving`.
+- The launcher's `grep -q "val_loss"` smoke check then false-positive matched
+  `val_loss_every: 4000` (env var dump line) — so phase1_launch.sh thought
+  smoke "passed" and launched the full Shot 1.
+- Shot 1 PID 508636 then ALSO entered torch.compile from scratch (smoke didn't
+  populate the cache because it never reached a forward pass). 6+ min in,
+  still in compile, GPU at 0%, training had not started.
+- Fix: kill Shot 1 + the inductor compile_workers, restart with
+  `TORCH_COMPILE_DISABLE=1 TORCHDYNAMO_DISABLE=1`. With dynamo disabled the
+  script's `torch.compile(base_model, ...)` becomes a no-op and the model runs
+  in eager mode. Math is identical (same FA3 kernels, same tensors), only
+  kernel fusion is missed (~30% slower per step on H100). For Phase 1
+  validation that's the right tradeoff.
+- New PID 598575 launched at 00:33Z. GPU jumped from 0% to 100% / 296W within
+  15 sec. Training is now actually happening.
+- **PERMANENT** — these env vars are documented in PHASE1_PLAN.md SUBMISSION-RUN
+  PRE-FLIGHT section and should be set on every Phase 1 run. Phase 2 work to
+  re-enable torch.compile must budget the first-run compile time properly
+  (5+ min on H100 PCIe for our model shape) — the simple fix is to do a
+  warm-up run that produces the inductor cache, then the real submission run
+  reuses the cache.
+- Also discovered: phase1_launch.sh's smoke `grep -q "val_loss"` matches the
+  env var dump. TODO fix to grep for `val_loss:` (with colon).
+
+## 2026-04-09 00:35Z — Cron fire 3: Shot 1 RUNNING (no compile), GPU 71-100%
+
+- PID 598575 alive, started 00:33Z (~2 min in). 99% CPU steady (data loader),
+  GPU samples 100% / 71% / 77% / 296W (active training, healthy variance).
+- 52 GB GPU memory allocated (model + ~~activations + optimizer state).
+- Tokenize alive in parallel (PID 2280, was paused briefly during the kill +
+  restart, resumed via `kill -CONT`). 40 train shards.
+- Shot 1 log at line 97, currently in `warmup_step: 10/20`. Real training
+  output should start appearing within the next 1-2 min as warmup completes.
+- Effective wallclock budget: 588000 ms = 9.8 min. Should produce a val_bpb
+  by ~10:43 AEST. The val_bpb will be undertrained vs the comp record's full
+  20000-iter run, but Phase 1 success criterion is just `val_bpb <= 1.30`
+  (any number that demonstrates the pipeline works end-to-end).
+
 ## 2026-04-09 00:25Z — Cron fire 2: smoke test in torch.compile phase, tokenize alive
 
 - Tokenize PID 2280 alive, 322 min cumulative CPU, 31 train + 1 val shard (rate

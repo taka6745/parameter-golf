@@ -106,6 +106,93 @@ documented in the `Hyperparameters` class.
 5. **GitHub git push is flaky on this network** — HTTP 408 timeouts. Bumping
    `http.postBuffer` to 524288000 helps. If push fails, fall back to direct
    `/tmp/podpush.sh` of changed files to the pod.
+6. **Never commit data files >50 MB** — commit `96efff3` accidentally added 13
+   .npy files >100 MB and silently blocked every git push to origin/main with
+   `pre-receive hook declined`. Cleaned up via destructive history rewrite +
+   force-push. The `.githooks/pre-commit` hook now refuses any commit adding a
+   single file >50 MB. Activate via `git config core.hooksPath .githooks`.
+7. **FA3 wheel is built against torch 2.9.1+cu128**, the default RunPod PyTorch
+   image ships torch 2.4.1+cu124. The FA3 import fails with `undefined symbol:
+   aoti_torch_create_device_guard`. Fix: `pip install torch==2.9.1 torchvision
+   torchaudio --index-url https://download.pytorch.org/whl/cu128`. Without
+   FA3, train_gpt_phase1.py falls back to SDPA (math identical, ~30% slower).
+8. **torch.compile / TorchInductor first-run compile takes 5+ min on H100 PCIe**
+   for the train_gpt_phase1.py model. With a 10-min wallclock budget, compile
+   eats most of it before any real training happens. For Phase 1 (validation),
+   set `TORCH_COMPILE_DISABLE=1 TORCHDYNAMO_DISABLE=1` to skip compile entirely
+   — math is identical, only kernel fusion is missed. Phase 2 work re-enables
+   compile and budgets the first-run compile time properly.
+9. **phase1_launch.sh smoke test grep is a false positive**: `grep -q "val_loss"`
+   matches the `val_loss_every: 4000` env var dump line, so smoke "passes" even
+   when training never produced a real `val_loss` step. The smoke test should
+   grep for `val_loss:` (with colon) instead. TODO fix in launcher.
+
+---
+
+## ★ SUBMISSION-RUN PRE-FLIGHT (do this in order on a fresh H100 pod)
+
+A clean RunPod H100 pod takes **~5 min** of pre-flight if you follow this list,
+vs the ~1h 43m we burned the first time. Run on the pod:
+
+```bash
+# 0. Bootstrap (assumes the pod image is runpod/pytorch:2.4.0+ with paramgolf cloned)
+cd /workspace/paramgolf
+git pull origin main
+
+# 1. Upgrade torch to match the FA3 wheel ABI (~2 min)
+pip install --quiet torch==2.9.1 torchvision torchaudio \
+    --index-url https://download.pytorch.org/whl/cu128
+python3 -c "from flash_attn_interface import flash_attn_func; print('FA3 ok')"
+
+# 2. Pre-stage the SP model OUTSIDE the destination tokenizers_dir (avoids the
+#    unlink-before-reuse bug). The model file must already be in the repo OR
+#    pushed via /tmp/podpush.sh from your Mac.
+mkdir -p /root/sp_models
+cp data/tokenizers/fineweb_8192_bpe.model /root/sp_models/  # if in repo
+cp data/tokenizers/fineweb_8192_bpe.vocab /root/sp_models/
+
+# 3. Pre-stage the docs JSONL on container disk (NOT on /workspace, the 50 GB
+#    volume quota will deny it). 45 GB raw text.
+mkdir -p /root/paramgolf_bigdata
+# (Either: pull from HF cache, OR push via podpush.sh from Mac, OR rerun the
+# tokenize script once with HF_HOME=/root/.cache/huggingface so it lands on
+# container disk by default)
+
+# 4. Symlink JSONL back into the repo path so the tokenize script finds it
+ln -sfn /root/paramgolf_bigdata/docs_selected.jsonl \
+    data/datasets/docs_selected.jsonl
+
+# 5. Run tokenize (~30-60 min). Background it; tokenize uses ~10 cores so the
+#    GPU is unavoidably idle during this phase. The MATCHED_FINEWEB_SKIP_HF_COPY
+#    env var is what skips the 45 GB re-copy.
+chmod +x runpod_tests/loop/phase1_tokenize.sh
+nohup bash runpod_tests/loop/phase1_tokenize.sh \
+    > logs/phase1_tokenize.log 2>&1 &
+
+# 6. Wait for >= 50 train shards in
+#    data/datasets/datasets/fineweb10B_sp8192/fineweb_train_*.bin
+#    (or full ~120 for the actual submission run)
+
+# 7. Launch Shot 1 with COMPILE DISABLED for fast iteration. The phase1_launch.sh
+#    script wraps smoke + Shot 1, but its smoke test has a false-positive grep
+#    bug, so for the submission run prefer launching train_gpt_phase1.py
+#    directly with the right env vars:
+SEED=42 \
+MAX_WALLCLOCK_SECONDS=600 \
+TTT_ENABLED=1 \
+TORCH_COMPILE_DISABLE=1 \
+TORCHDYNAMO_DISABLE=1 \
+TRAIN_LOG_EVERY=10 \
+DATA_DIR=./data/ \
+VOCAB_SIZE=8192 \
+nohup python3 -u train_gpt_phase1.py > logs/phase1_shot1_seed42.log 2>&1 &
+```
+
+**Expected timing on a fresh H100 pod following this checklist**:
+- Pre-flight steps 0-4: ~5 min
+- Tokenize (step 5): ~30-60 min CPU bound, GPU idle
+- Shot 1 launch (step 7): ~10 min wallclock (no compile delay)
+- **Total: ~50-80 min from cold pod to first val_bpb result**
 
 ---
 
