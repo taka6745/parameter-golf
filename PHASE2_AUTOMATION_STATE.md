@@ -10,7 +10,7 @@
 | exp | description | status | val_bpb (unquant / quant) | ms/step | log | notes |
 |---|---|---|---|---|---|---|
 | **E1** | Shot 0e validation: Phase 1 stack + fix, `bash run.sh` direct, no compile, TTT=0 | **running (retry)** | — / — | — | `/tmp/paramgolf_bootstrap.log` | initial run @ 0544Z crashed OOM in PreQ TTT (3090 24 GB). **RETRY** @ 0647Z with `PREQUANT_TTT_EPOCHS=0 PREQUANT_TTT_ENABLED=0 TTT_ENABLED=0`. NGR_LOG_FREQ_INV fix path confirmed firing in crash log. PID 3843576 |
-| E2 | Phase 2 Shot 1 (torch.compile on) via phase2/run.sh direct | pending | | | | waits on E1 done. **Note**: TTT needs `PREQUANT_TTT_BATCH_SEQS=8` on 3090 (OOM at 32) |
+| E2 | Phase 2 Shot 1 (torch.compile on) via phase2/run.sh direct | pending | | | | waits on E1 done. TTT OOM fix LANDED in run.sh `6e7f299` — auto-detects VRAM < 40 GB and drops `PREQUANT_TTT_BATCH_SEQS` 32→8 |
 | E3 | Code + test Shot 17 (fuzzy LR bandit, ~80 LOC) | pending | | | | needs coding |
 | E4 | Code + test Shot 0b (streaming KV eval, ~250 LOC) | pending | | | | needs coding |
 | E5 | Code + test Shot 10 (Parameter Banking + Parallel Muon, ~200 LOC) | pending | | | | needs coding |
@@ -32,4 +32,5 @@
 - Total commits by driver: 4 (fires 1, 2, 3, 4)
 - E1 phase: **retry running @ 0647Z** (initial crashed OOM in TTT at 0643Z). Data staged (skipping tokenize/ngram on retry). ETA: train 120s + quant + quant eval = **~4 min to E1 retry complete (~0652Z)**
 - **Key datapoint from crashed run**: ms/step = 2935 on 3090 (no compile, no FA3). tok/s = 80K. 37 steps in 120s budget. The Shot 0e NGR_LOG_FREQ_INV fix is confirmed firing in forward_logits (log lines present).
-- **TTT OOM on 3090 needs follow-up for E2+**: try `PREQUANT_TTT_BATCH_SEQS=8` (4× less activation memory) or `PREQUANT_TTT_FREEZE_BLOCKS=4`
+- **TTT OOM FIX LANDED** (commit `6e7f299`): `submission/run.sh` now auto-detects GPU VRAM via nvidia-smi and drops `PREQUANT_TTT_BATCH_SEQS` from 32 to 8 when < 40 GB. H100 80 GB path unchanged. E2+ experiments will get real TTT-enabled val_bpb numbers on the 3090.
+- **E1 retry status at 0654Z**: past train (37 steps OK), past EMA, past pre-quant eval (val_bpb 3.0348), currently in **GPTQ quantization**. Peak memory 19,308 MiB / 24,576 MiB. **Shot 0e fix confirmed in serialization**: GPTQ passthrough list shows `_nlfi_bigram_mult, _nlfi_trigram_mult, _nlfi_fourgram_mult, _nlfi_stored_flag` as float16 passthrough — persistent buffers are being saved alongside quantized weights. Quantized eval ~2-3 min away.
