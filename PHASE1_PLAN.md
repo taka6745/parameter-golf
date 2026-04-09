@@ -1,8 +1,113 @@
 # Phase 1 Plan — Validate the target stack on H100
 
-Written 2026-04-09 (post NIGHT_MODE termination). Updated to H100 hardware 2026-04-09. Owner: Claude + Takoda.
+Written 2026-04-09 (post NIGHT_MODE termination). Updated to H100 hardware 2026-04-09.
+Last revised 2026-04-09 ~10:00 AEST after the tokenize-restart episode. Owner: Claude + Takoda.
 
 Phase 1 purpose: **validate the real target stack** (SP8192 + Score-First TTT + parallel residuals + AR self-gen GPTQ + int6 GPTQ + brotli compression) end-to-end on H100 hardware — the same architecture the comp records use — and lock in the measured val_bpb as our new baseline. The current 1.3711 plateau champion is NOT our submission target: it's on SP1024, which is obsolete on the merged leaderboard.
+
+---
+
+## ★ OPERATIONAL STATE (live — kept fresh by every cron fire)
+
+**Live as of 2026-04-08 23:55Z (= 2026-04-09 09:55 AEST)**.
+
+**Trainer entry point**: `train_gpt_phase1.py` at repo root (clean 491-line decoded
+PR #1477 with FA3/SDPA fallback). **NO patcher hunks**. Driven entirely by env vars
+documented in the `Hyperparameters` class.
+
+**Bash launchers** (clean, in `runpod_tests/loop/`):
+- `phase1_tokenize.sh` — runs `data/download_hf_docs_and_tokenize.py` with the right
+  env vars + `--reuse-sp-model 8192=/root/sp_models/fineweb_8192_bpe.model` to skip
+  the 5-10 min tokenizer training and the 45 GB JSONL re-copy. Disk-headroom
+  pre-flight refuses to launch if /workspace has <30 GB free.
+- `phase1_launch.sh` — symlinks the nested `data/datasets/datasets/...` paths,
+  smoke-tests train_gpt_phase1.py for 30 s, then runs the full 600 s Shot 1.
+
+**Pod operational invariants** (must hold for any clean restart):
+1. `data/datasets/docs_selected.jsonl` is a symlink → `/root/paramgolf_bigdata/docs_selected.jsonl`
+   (the 45 GB raw FineWeb-Edu dump lives on container disk, NOT on the 50 GB volume
+   quota — the volume only stores the 24 GB SP8192 shards).
+2. `/root/sp_models/fineweb_8192_bpe.model` exists (370908 bytes, pushed from Mac).
+   This is the canonical SP source — the script's
+   `build_sentencepiece_tokenizer()` would otherwise unlink the destination
+   `model_path` BEFORE checking `reuse_model_path`, so the source must live
+   OUTSIDE the destination tokenizers_dir.
+3. `data/datasets/tokenizers/fineweb_8192_bpe.model` is a copy of the above
+   (the script copies on each run; absence here is fine — script will rebuild).
+4. `data/datasets/datasets/fineweb10B_sp8192/` is the shard output dir (path nesting
+   is `data/datasets/datasets/<dataset_name>/` because the script uses
+   `output_root/datasets/<dataset_name>`).
+5. `MATCHED_FINEWEB_SKIP_HF_COPY=1` is exported when re-running the tokenize so
+   `copy_from_hf_cache()` short-circuits when destinations exist.
+
+**Disk topology** (don't get bitten again):
+- `/workspace` = network FS via `mfs#us-ks-2.runpod.net:9421`. **50 GB per-pod
+  quota** enforced at the RunPod control plane (NOT visible via `df`). df reports
+  the mfs cluster total. The 50 GB quota holds **persistent** data across pod
+  restarts.
+- `/` and `/root` = overlayfs, **100 GB ephemeral container disk**, wiped on pod
+  restart. Faster IO than /workspace. Use this for:
+  - the 45 GB raw JSONL during tokenize
+  - the SP source model in /root/sp_models/
+  - the HF cache (auto-populated, 45 GB during download — delete after)
+- The 24 GB SP8192 shards live on `/workspace` so they survive pod restart.
+
+**Pod state files** (read on every cron fire):
+- `PHASE1_TROUBLESHOOTING.md` — append-only diagnosis log (every fix tagged
+  PERMANENT or AD-HOC)
+- `PHASE1_RESULTS.md` — append-only shot ledger
+- `runpod_tests/loop/phase1_tokenize.sh` — re-runnable tokenize launcher
+- `runpod_tests/loop/phase1_launch.sh` — Shot 1 smoke + full launcher
+
+## In-flight tokenize (started 2026-04-08 23:54Z)
+
+- Process: `python3 -u data/download_hf_docs_and_tokenize.py --output-root data/datasets --tokenizer-config data/tokenizer_specs_8192.json --reuse-sp-model 8192=/root/sp_models/fineweb_8192_bpe.model`
+- Env: `MATCHED_FINEWEB_SKIP_HF_COPY=1`
+- Background nohup'd, log at `logs/phase1_tokenize.log`
+- Initial throughput: 1 train shard (200 MB, 100 M tokens) per ~60 sec on 3-4
+  cores (326% CPU). Total ~120 train shards expected = ~120 minutes wallclock.
+- Sustained rate to verify after the first 10 minutes — may be faster once warm.
+- ETA: shards complete ~01:54 UTC = **11:54 AEST 2026-04-09**.
+- This means **Shot 1 will start ~6 min before the noon AEST cron deadline**, so
+  Shot 1 results will land just past noon. The noon wrap cron (11:58 AEST) will
+  decide whether to keep the pod alive past noon based on Shot 1 progress.
+
+## Cron loop driving Phase 1
+
+- **Recurring monitor** `4,17,30,43,56 9-11 9 4 *` (every 13 min, hours 9-11
+  AEST 2026-04-09) — checks tokenize / Shot N status, kicks off the next step
+  when its predecessor is done, appends to PHASE1_TROUBLESHOOTING.md +
+  PHASE1_RESULTS.md, commits + pushes.
+- **One-shot final wrap** `58 11 9 4 *` (11:58 AEST 2026-04-09) — final summary,
+  decision on whether to recommend killing the pod, leave a clean handoff for
+  the next session. **Does NOT kill the pod itself** — only the user kills.
+- Both crons are **session-only** (durable=true didn't persist in this Claude
+  build). They die if this Claude session exits before noon. Keep the session
+  alive.
+
+## Lessons learned this session (durable rules to honor)
+
+1. **Always use clean python files** — `train_gpt_phase1.py` for training,
+   `data/download_hf_docs_and_tokenize.py` for tokenize. NEVER patcher hunks
+   (`08_patch_train_gpt.sh`). The submission run on this same H100 must be
+   reproducible from the repo with no in-pod ad-hoc state.
+2. **The 50 GB volume vs 100 GB container disk distinction is real and lethal**.
+   The `df` output does NOT show the 50 GB quota — only the runpod web telemetry
+   does. Pre-flight check: `df -k /workspace | awk 'NR==2 {print $4}'` is
+   misleading; ALSO check the runpod telemetry tab when in doubt.
+3. **HuggingFace `hf_hub_download` always tries to re-cache** — the
+   `MATCHED_FINEWEB_SKIP_HF_COPY=1` env var (added this session, gates
+   `copy_from_hf_cache()`) makes the script reuse a pre-staged JSONL. Without it,
+   re-running the script blasts 45 GB of duplicate data onto disk every time.
+4. **`build_sentencepiece_tokenizer()` unlinks the destination model BEFORE
+   reading `--reuse-sp-model` source** — if both paths point at the same file,
+   the source is gone before reuse. Always stash the source OUTSIDE the
+   destination tokenizers_dir (we use `/root/sp_models/`).
+5. **GitHub git push is flaky on this network** — HTTP 408 timeouts. Bumping
+   `http.postBuffer` to 524288000 helps. If push fails, fall back to direct
+   `/tmp/podpush.sh` of changed files to the pod.
+
+---
 
 ## H100 narrow rule override
 
