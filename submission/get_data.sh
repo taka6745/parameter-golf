@@ -42,7 +42,12 @@ if [ -f "$DOCS_JSONL" ] && [ "$(stat -c %s "$DOCS_JSONL" 2>/dev/null || stat -f 
     echo "[get_data] $DOCS_JSONL already exists ($(du -sh "$DOCS_JSONL" | cut -f1)) — skipping download"
 else
     echo "[get_data] downloading docs_selected.jsonl from HF Hub..."
+    # Use os.link (hard link) instead of shutil.copy2 — same filesystem, single
+    # inode, ZERO extra disk usage. The HF cache gets deleted afterward to free
+    # the original cache copy. (shutil.copy2 doubled disk usage to 90 GB on
+    # Pod L and OOM'd the 100 GB container disk before we got to tokenize.)
     python3 - <<'PYEOF'
+import os, shutil
 from pathlib import Path
 from huggingface_hub import hf_hub_download
 dst = Path('/root/paramgolf_bigdata/docs_selected.jsonl')
@@ -53,10 +58,25 @@ src = hf_hub_download(
     subfolder='datasets',
     repo_type='dataset',
 )
-import shutil
-shutil.copy2(src, dst)
-print(f'  saved to {dst}, {dst.stat().st_size:,} bytes')
+src_path = Path(src).resolve()
+if dst.exists():
+    dst.unlink()
+try:
+    os.link(src_path, dst)  # hard link, 0 extra disk
+    print(f'  hard-linked {src_path} -> {dst}')
+except OSError:
+    # Cross-FS or unsupported, fall back to copy
+    shutil.copy2(src_path, dst)
+    print(f'  copied (fallback) {src_path} -> {dst}')
+print(f'  size: {dst.stat().st_size:,} bytes')
 PYEOF
+    # Now drop the HF cache copy — it's redundant once we have the linked file.
+    # If get_data.sh re-runs, the existence check above will short-circuit before
+    # we hit hf_hub_download, so deleting the cache here is safe.
+    if [ -d /root/.cache/huggingface ]; then
+        echo "[get_data] dropping /root/.cache/huggingface (redundant after hard link)"
+        rm -rf /root/.cache/huggingface
+    fi
 fi
 
 # === Step 2: symlink JSONL into repo path ===
