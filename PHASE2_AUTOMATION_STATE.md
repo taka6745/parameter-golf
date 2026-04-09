@@ -13,7 +13,7 @@
 |---|---|---|---|---|---|---|
 | **E1** | Shot 0e validation: Phase 1 stack + fix, `bash run.sh` direct, no compile, TTT=0 | ✅ **done** | 3.03477 / **3.05683** | **2933** | `phase2/run_logs/e1_crash_0644Z.log` (initial crash) | **Shot 0e FIXED** — quant gap 0.02206 BPB (was -2.62). Artifact 11.1 MB ✅. 37 steps in 120s cap. |
 | E2 | Phase 2 Shot 1 (torch.compile on) via phase2/run.sh | ✅ **done** | 2.92033 post-EMA / **1.42528 post-TTT** / 3.29089 quant ⚠️ | **1581** (1.85× vs E1) | `/tmp/paramgolf_bootstrap.log` | Speed win ✅. **New bug**: quant gap 1.866 BPB when TTT on (vs E1's 0.022). Post-TTT unquant 1.425 matches H100 reference — TTT works. Does not block E3-E5 fast-screen (TTT=0). |
-| E3 | Code + test Shot 17 (fuzzy LR bandit, ~80 LOC) | pending | | | | needs coding. **Fast-screen mode**: `PREQUANT_TTT_EPOCHS=0`, `MAX_WALLCLOCK_SECONDS=120`. Goal: A/B train_loss vs E2 at step ≥50 |
+| E3 | Code + test Shot 17 (fuzzy LR bandit) | **running** | — / — | — | `/tmp/paramgolf_bootstrap.log` | coded `6d23931` (21 LOC inline in train_model). Thompson-sample over {0.5x,1x,2x} × base LR schedule, reward = train_loss decrease. Launched @ 0848Z fast-screen mode (TTT=0). PID 3874168 |
 | E4 | Code + test Shot 0b (streaming KV eval, ~250 LOC) | pending | | | | needs coding. **Fast-screen mode**: eval-only shot — run new eval path on E1/E2 artifact, compare val_bpb to baseline eval |
 | E5 | Code + test Shot 10 (Parameter Banking + Parallel Muon, ~200 LOC) | pending | | | | needs coding. **Fast-screen mode**: `PREQUANT_TTT_EPOCHS=0`, `MAX_WALLCLOCK_SECONDS=120`. Goal: ms/step delta + peak VRAM delta |
 
