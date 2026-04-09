@@ -268,7 +268,33 @@ Dropped Pod β (reference baseline) — the 1.3711 champion baseline is already 
 
 Total Phase 1 burn target: **$5-12**, hard cap **$15**. Phase 2/3 revert to cheap 3090 fleet (separate budget).
 
-## Shot sequence (ordered, each gates the next)
+## ★ REVISED SHOT PLAN (2026-04-09 — after script inventory)
+
+**Insight**: `train_gpt_phase1.py` is the decoded PR #1477 reproduction. It already
+contains the full target stack (SP8192, parallel residuals via PARALLEL_START_LAYER=7,
+TTT via eval_val_sliding_ttt, int6 GPTQ, brotli, EMA 0.997, looped layers, XSA
+last_n=11, ln_scale, qk_gain=4, softcap=30, Muon row-normalize). The original
+8-shot plan below was written assuming we'd build the stack incrementally — that
+work is unnecessary. Shots 3-7 are already in the script as default behavior.
+
+**The actual remaining shots** (in priority order):
+
+| # | Shot | Goal | Why | Code change? |
+|---|---|---|---|---|
+| **R1** | **Baseline run** (DOING NOW) | seed 42 + 600s wallclock + TTT_ENABLED=1, all PR #1477 defaults | Validate the script runs end-to-end on 1×H100 PCIe, get a number | None — `train_gpt_phase1.py` defaults |
+| **R2** | **n=2 seed confirm** | seed 1337 + same env as R1 | Confirm R1 is not lucky | None — change SEED env var |
+| **R3** | **Full-budget variant** | seed 42 + LONGER wallclock (1500-3000s) | Get a number that's actually competitive with PR #1477's ~1.08 (their full run is 8×H100 × 600s ≈ 4800 GPU-sec; 1×H100 × 3000s = 3000 GPU-sec, comparable) | None — `MAX_WALLCLOCK_SECONDS=3000` |
+| **R4** | **AR self-gen GPTQ port** | port from PR #1019 — replace `collect_hessians(train_loader)` with self-generated calibration | -0.003 to -0.005 BPB on top of #1477 | YES — new function, ~30 lines |
+| **R5** | **8×H100 SXM submission run** | spin up 8×H100 SXM pod, run R4 stack with `WORLD_SIZE=8`, 3-seed mean | Actual submission number | YES — verify DDP path + write `runpod_tests/loop/submission_8h100.sh` launcher |
+
+**What this means for today**: R1 (in flight), R2 (15-30 min), maybe R3 (45-60 min)
+all fit before noon AEST. R4 + R5 are next-session work. **The original 8-shot
+plan's "Shots 3-7 dev work" doesn't exist** — it was already done by whoever
+decoded PR #1477 into `train_gpt_phase1.py`.
+
+---
+
+## Shot sequence (ORIGINAL — kept for historical context, superseded by REVISED above)
 
 ### Shot 1 — SP8192 deployment (45-60 min, $0.25)
 
