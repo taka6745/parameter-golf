@@ -20,7 +20,8 @@
 | **E4** | NEW | `torch.compile(mode='max-autotune')` | 1 | +5-15% | ❌ **failed** | | CUDA graphs conflict with rotary embedding caching pattern (`self._cos_cached = freqs.cos()[...]` at train.py:231 gets overwritten by subsequent graph runs). Crashed 1034Z. |
 | **E4b** | NEW | `torch.compile(mode='max-autotune-no-cudagraphs')` | 0 | +3-10% | ✅ **done** | **1526** (+3.7% vs E2, **1.92× vs E1**) | quant gap 0.094, artifact 11.13 MB |
 | **E5** | NEW | E4b + `cudnn.benchmark=True` | 1 | +1-5% | ✅ **done** | **1514** (+0.8% vs E4b, **1.94× vs E1**) | tiny incremental win |
-| **E8** | NEW | E5 + `NUM_LOOPS=1` (disable layer_loop extra iterations, speed-only A/B) | 0 | +15-20% | **running** | | launched ~1144Z, PID 3953008. Accept quality drift — this is a speed test to quantify the cost of 3-layer recurrence. |
+| **E8** | NEW | E5 + `NUM_LOOPS=1` | 0 | +15-20% | ✅ **done** | **1410** (+6.9% vs E5, **🎯 2.08× vs E1**) | 77 steps. Quality intact (2.928 pre-quant). Clean 2× crossed. |
+| **E8c** | NEW | E8 + `TORCHINDUCTOR_COORDINATE_DESCENT_TUNING=1` | 0 | +3-10% | **running** | | launched ~1208Z, PID 3974609. Extra inductor kernel tuning via env var. |
 | **E6** | S10 | Parameter Banking + Parallel Muon (batch NS across shape-matched params) | 150 | +10-20% | pending_wip | | big coding effort |
 | **E7** | S4 | Fused n-gram bias Triton kernel (~200 kernel launches/step currently) | 150 | +5-10% | pending | | Triton works on 3090 |
 | **E9** | S12 | Multi-shard loader + dedicated copy stream | 100 | +2-5% | pending | | incremental prefetch win |
