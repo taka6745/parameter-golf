@@ -161,6 +161,21 @@ ln -sfn /root/paramgolf_bigdata/docs_selected.jsonl data/datasets/docs_selected.
 - Also discovered: phase1_launch.sh's smoke `grep -q "val_loss"` matches the
   env var dump. TODO fix to grep for `val_loss:` (with colon).
 
+## 2026-04-09 00:47Z — Cron fire 4: Shot 1 deep in training, loss 9.01 → 4.50
+
+- Training producing real output! Initial untrained val_bpb=3.4877 (sanity).
+- train_loss progression: 9.01 (s1) → 6.87 (s10) → 5.91 (s20) → 5.17 (s50)
+  → 4.80 (s80) → 4.50 (s110). Healthy decay.
+- Throughput: 200-210 K tok/s early, slowed to ~177 K tok/s by step 110 (likely
+  CPU/IO contention with the in-flight tokenize at PID 2280).
+- Wallclock at step 110 = 8.1 min / 9.8 min cap. ~25 more steps before cap.
+- 52 train shards (tokenize alive in parallel, +12 since cron fire 3).
+- Expected final val_bpb at end of run (after EMA + GPTQ int6 + brotli round
+  trip): probably 1.5-1.7 region. That's ABOVE the 1.30 Phase 1 success
+  criterion but the criterion is quite optimistic for a 588-sec run vs the
+  comp's 20000-iter full training. We'll know in ~3 min.
+- Next fire (10:56 AEST) should see Shot 1 DONE with val_bpb in the log.
+
 ## 2026-04-09 00:35Z — Cron fire 3: Shot 1 RUNNING (no compile), GPU 71-100%
 
 - PID 598575 alive, started 00:33Z (~2 min in). 99% CPU steady (data loader),
