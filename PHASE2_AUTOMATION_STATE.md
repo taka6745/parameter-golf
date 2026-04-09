@@ -56,6 +56,21 @@
 - **Best so far: E8 at 1410 ms/step = 2.08× vs E1**
 - **Orchestrator running PID 3994567** queued 6 experiments: E8d → E6 → E10b → E11 → E7a → E12_stack
 - Metrics log at `/tmp/paramgolf_orchestrator.log` on pod
-- **Coded + staged** (not yet run): E6 Parallel Muon, E11 BF16 n-grams, E7a ngram bigram-only, E10a rotary fix (unblocks E10b max-autotune retry)
-- **Still to code**: E10 explicit CUDA graphs (200 LOC, risky), E7 fused n-gram Triton kernel (150 LOC)
+- **Coded + staged** (not yet run): E6 Parallel Muon (`ca545ed`), E11 BF16 n-grams (`4146f4e`), E7a ngram bigram-only (`35d10a5`), E10a rotary pre-compute fix (`c8f8bb2`)
+- **Still to code**: E10 explicit CUDA graphs (200 LOC, risky), E7 fused n-gram Triton kernel (150 LOC), smaller-model env-var A/B (NUM_LAYERS, MLP_MULT)
 - **Target**: stretch 3-3.5× vs E1
+
+## Orchestrator protocol (for future cron fires)
+
+Pod runs `/tmp/paramgolf_orchestrator.sh` (PID from 1247Z launch). Each fire should:
+1. Check `/tmp/paramgolf_orchestrator.log` on pod for `[NAME] done` lines
+2. Update PHASE2_RESULTS.md with completed experiments
+3. If orchestrator is STILL RUNNING, wait
+4. If orchestrator FINISHED, code the next wave and launch a new orchestrator
+
+**Wave 2 candidates** to add in next orchestrator:
+- E13: NUM_LAYERS=8 (remove 3 of 11 blocks, quality hit for ~25% speed)
+- E14: MLP_MULT=2 (smaller FFN, ~20% speed expected)
+- E15: TRAIN_SEQ_LEN=1024 (more steps per wallclock, less context)
+- E16: champion stack = best of E8+E4b+E5+E6+E11 combined
+- E17: bigger TRAIN_BATCH_TOKENS now that bf16 tables free 750 MB (try 262144 or 327680)
