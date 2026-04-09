@@ -2,21 +2,16 @@
 
 **1 pod alive.** Pod L (`55fzwdfhbg9n4u`) spun up 2026-04-09 01:53Z for the dry run of the 10-patch differentiated submission stack via `submission/bootstrap.sh`. Pod K removed earlier, see history below.
 
-## Pod L — paramgolf-dryrun-h100 (NVIDIA H100 SXM 80GB HBM3) — DRY RUN ACTIVE
+## Pod L — paramgolf-dryrun-h100 (REMOVED 2026-04-09 0345Z)
 
-- **ID**: `55fzwdfhbg9n4u`
+- **ID**: `55fzwdfhbg9n4u` (DELETED via `runpodctl remove pod`)
 - **User hash**: `64411fec`
-- **GPU**: 1 × NVIDIA H100 SXM 80GB HBM3 (HBM3 = higher memory bandwidth than PCIe)
-- **Cost**: $2.99/h (secure cloud — H100 PCIe was sold out)
-- **Driver**: 580.126.09
-- **SSH proxy**: `ssh 55fzwdfhbg9n4u-64411fec@ssh.runpod.io -i ~/.ssh/id_ed25519`
-- **Image**: `runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04` (will upgrade torch to 2.9.1+cu128 in setup.sh)
-- **Disk**: 100 GB container + 50 GB volume @ /workspace
-- **Cluster**: us-ne-1.runpod.net (different from previous us-ks-2 cluster)
-- **Spin-up**: 2026-04-09 01:53Z
-- **Bootstrap**: launched via `curl -sL https://raw.githubusercontent.com/taka6745/paramgolf/main/submission/bootstrap.sh | bash`
-- **Bootstrap log**: `/tmp/paramgolf_bootstrap.log`
-- **Expected ETA**: ~60-90 min total (5 setup + 30-60 tokenize + 3 ngram + 10-15 train + 5-10 eval)
+- **GPU**: 1 × NVIDIA H100 SXM 80GB HBM3
+- **Cost total**: ~3h 15m × $2.99/h = **$9.72**
+- **Purpose** (was): Phase 1 dry run of the 10-patch differentiated stack via `submission/bootstrap.sh`
+- **Result**: Phase 1 ran end-to-end. Training 183 steps in 591s, train_loss 9.01 → 3.89. Pre-Quant AdamW TTT adapted to val_bpb **1.24108** (unquantized). **Quantized val_bpb = 3.86** revealed a critical NGR_LOG_FREQ_INV serialization bug (Shot 0e in PHASE2_PLAN.md). Killed the sliding LEGAL_TTT eval at 27% because it was running on a broken quantized model.
+- **Lessons captured**: PHASE1_RESULTS.md (DIFF rows), PHASE2_RESULTS.md (baseline + broken quant row), PHASE2_TROUBLESHOOTING.md (NGR_LOG_FREQ_INV bug writeup), PHASE2_PLAN.md Shot 0e (fix plan)
+- **Removal reason**: sliding eval would have taken ~30 more min on a broken model (~$1.50 burn for zero signal). Shot 0e fix is a code-only change; no need to keep the pod alive. Next pod spin-up is post-fix.
 
 ---
 

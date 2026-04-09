@@ -9,7 +9,8 @@ Each row: shot id, hardware, wallclock, steps achieved, ms/step, val_bpb, artifa
 
 | shot | hardware | wallclock | steps | ms/step | tok/s | val_bpb | artifact_bytes | speedup | status | utc |
 |---|---|---|---|---|---|---|---|---|---|---|
-| (P1 baseline) | 1×H100 SXM 80GB | 600s | 180 | ~3300 | ~280K | TBD | TBD | 1.0× | Phase 1 dry run | 20260409T0230Z approx |
+| **P1 baseline (DIFF, unquantized)** | 1×H100 SXM 80GB HBM3 | 591s train + 1606s PreQ TTT (~37 min total) | 183 train + 8 PreQ TTT epochs | ~3230 ms/step | ~270K | **1.24108** (unquantized, post-PreQ-TTT) | ~16 MB (broken path) | 1.0× | **RESEARCH-GRADE — not comp-legal** (wallclock overrun on TTT) | 20260409T0316Z |
+| **P1 baseline (DIFF, quantized)** | 1×H100 SXM 80GB HBM3 | same + GPTQ int6 + brotli | post-train | n/a | n/a | **3.86174** ❌ | n/a | n/a | **BROKEN** — NGR_LOG_FREQ_INV serialization bug (Shot 0e blocks P2 start) | 20260409T0317Z |
 
 ---
 
