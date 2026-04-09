@@ -181,7 +181,39 @@ class GPT(nn.Module):
 			all_indices.extend(range(h.loop_end+1,h.num_layers));num_enc=len(all_indices)//2;self.encoder_indices=all_indices[:num_enc];self.decoder_indices=all_indices[num_enc:]
 		else:self.encoder_indices=list(range(self.num_encoder_layers));self.decoder_indices=list(range(self.num_encoder_layers,h.num_layers))
 		self.num_skip_weights=min(len(self.encoder_indices),len(self.decoder_indices));self.skip_weights=nn.Parameter(torch.ones(self.num_skip_weights,h.model_dim,dtype=torch.float32));self.skip_gates=nn.Parameter(torch.zeros(self.num_skip_weights,h.model_dim,dtype=torch.float32))if h.skip_gates_enabled else None
-		self.parallel_start_layer=int(os.environ.get('PARALLEL_START_LAYER','7'));self.lane_merge=nn.Parameter(torch.tensor(0.5))if self.parallel_start_layer>0 else None;self._init_weights()
+		self.parallel_start_layer=int(os.environ.get('PARALLEL_START_LAYER','7'));self.lane_merge=nn.Parameter(torch.tensor(0.5))if self.parallel_start_layer>0 else None
+		# NGRAM_BIAS (NIGHT_MODE infrastructure for NGRAM_BACKOFF + world-novel L09 refinements)
+		# Loads precomputed bigram/trigram/fourgram log-prob tables as non-persistent buffers.
+		# Tables built by submission/build_ngrams.py from tokenized shards. Loaded fresh on every
+		# pod boot — they do NOT count toward the 16 MB submission limit.
+		# Hash function: polynomial (prev * 36313 + cur * 27191 + ...) % HASH_BUCKETS.
+		# At forward time, looks up bias via hash and adds to logits.
+		self._ngram_enabled=bool(int(os.environ.get('USE_NGRAM_BIAS','0')))
+		self._ngram_w_bigram=float(os.environ.get('NGRAM_W_BIGRAM','0.20'))
+		self._ngram_w_trigram=float(os.environ.get('NGRAM_W_TRIGRAM','0.15'))
+		self._ngram_w_fourgram=float(os.environ.get('NGRAM_W_FOURGRAM','0.10'))
+		self._ngram_hash=int(os.environ.get('NGRAM_HASH_BUCKETS','16384'))
+		self._ngram_backoff=bool(int(os.environ.get('USE_NGRAM_BACKOFF','0')))
+		self._ngram_backoff_t4=float(os.environ.get('NGRAM_BACKOFF_THRESH4','1.0'))
+		self._ngram_backoff_t3=float(os.environ.get('NGRAM_BACKOFF_THRESH3','1.0'))
+		self._ngram_backoff_alpha=float(os.environ.get('NGRAM_BACKOFF_ALPHA','0.4'))
+		self.register_buffer('_bigram_tab',torch.zeros(1,dtype=torch.float32),persistent=False)
+		self.register_buffer('_trigram_tab',torch.zeros(1,dtype=torch.float32),persistent=False)
+		self.register_buffer('_fourgram_tab',torch.zeros(1,dtype=torch.float32),persistent=False)
+		if self._ngram_enabled:
+			vs=h.vocab_size
+			for tab_attr,fname,label in [
+				('_bigram_tab',f'data/bigram_tab_{vs}v.npy','bigram'),
+				('_trigram_tab',f'data/trigram_logprobs_{vs}v.npy','trigram'),
+				('_fourgram_tab',f'data/fourgram_logprobs_{vs}v.npy','fourgram'),
+			]:
+				try:
+					_arr=np.load(fname)
+					setattr(self,tab_attr,torch.from_numpy(_arr).float())
+					print(f'NGRAM_BIAS: loaded {label} {_arr.shape} from {fname}',flush=True)
+				except Exception as _e:
+					print(f'NGRAM_BIAS: {label} load failed ({fname}): {_e}',flush=True)
+		self._init_weights()
 	def _init_weights(self):
 		if self.tie_embeddings:nn.init.normal_(self.tok_emb.weight,mean=.0,std=self.tied_embed_init_std)
 		for(name,module)in self.named_modules():
@@ -213,7 +245,44 @@ class GPT(nn.Module):
 		if self.head_proj is not None:x=self.head_proj(x)
 		if self.tie_embeddings:logits_proj=F.linear(x,self.tok_emb.weight)
 		else:logits_proj=self.lm_head(x)
-		return self.logit_softcap*torch.tanh(logits_proj/self.logit_softcap)
+		logits=self.logit_softcap*torch.tanh(logits_proj/self.logit_softcap)
+		# NGRAM_BIAS apply: blend in precomputed n-gram log-prob bias (NIGHT_MODE infra)
+		# When NGRAM_BACKOFF is on: order-adaptive Stupid Backoff (Brants 2007). Pick the
+		# highest-order hash whose peak log-prob exceeds the threshold; lower orders attenuated
+		# by alpha. Otherwise: weighted sum of all three orders.
+		if self._ngram_enabled and self._bigram_tab.numel()>1:
+			B,S=input_ids.shape
+			_zeros1=torch.zeros(B,1,device=input_ids.device,dtype=input_ids.dtype)
+			_zeros2=torch.zeros(B,2,device=input_ids.device,dtype=input_ids.dtype)
+			_ids_flat=input_ids.reshape(-1).long()
+			_prev2=torch.cat([_zeros1,input_ids[:,:-1]],dim=1).reshape(-1).long()
+			_prev3=torch.cat([_zeros2,input_ids[:,:-2]],dim=1).reshape(-1).long()
+			H=self._ngram_hash
+			_h_bi=(_ids_flat*36313)%H
+			_h_tri=(_prev2*36313+_ids_flat*27191)%H
+			_h_four=(_prev3*36313+_prev2*27191+_ids_flat*51497)%H
+			_bi=self._bigram_tab[_h_bi].reshape(B,S,-1)
+			if self._ngram_backoff and self._trigram_tab.numel()>1 and self._fourgram_tab.numel()>1:
+				# NGRAM_BACKOFF (Brants 2007 Stupid Backoff): pick the highest-confidence order
+				_tri=self._trigram_tab[_h_tri].reshape(B,S,-1)
+				_four=self._fourgram_tab[_h_four].reshape(B,S,-1)
+				_peak4=_four.amax(dim=-1,keepdim=True)
+				_peak3=_tri.amax(dim=-1,keepdim=True)
+				_use_4=(_peak4>self._ngram_backoff_t4).to(_four.dtype)
+				_use_3=(1-_use_4)*(_peak3>self._ngram_backoff_t3).to(_tri.dtype)
+				_use_bi=1-_use_4-_use_3
+				_alpha=self._ngram_backoff_alpha
+				_ng=_use_4*_four+_use_3*_tri*_alpha+_use_bi*_bi*(_alpha*_alpha)
+				logits=logits+_ng.to(dtype=logits.dtype)
+			else:
+				# Weighted sum of all 3 orders (additive blend)
+				_bias=self._ngram_w_bigram*_bi
+				if self._trigram_tab.numel()>1:
+					_bias=_bias+self._ngram_w_trigram*self._trigram_tab[_h_tri].reshape(B,S,-1)
+				if self._fourgram_tab.numel()>1:
+					_bias=_bias+self._ngram_w_fourgram*self._fourgram_tab[_h_four].reshape(B,S,-1)
+				logits=logits+_bias.to(dtype=logits.dtype)
+		return logits
 	def forward(self,input_ids,target_ids):logits=self.forward_logits(input_ids);return F.cross_entropy(logits.reshape(-1,logits.size(-1)).float(),target_ids.reshape(-1),reduction='mean')
 def classify_param(name):
 	if'tok_emb'in name or'lm_head'in name:return'embed'

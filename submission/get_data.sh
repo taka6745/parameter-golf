@@ -111,8 +111,30 @@ python3 -u data/download_hf_docs_and_tokenize.py \
 
 NUM_SHARDS=$(ls "$SHARDS_DIR"/fineweb_train_*.bin 2>/dev/null | wc -l)
 NUM_VAL=$(ls "$SHARDS_DIR"/fineweb_val_*.bin 2>/dev/null | wc -l)
-echo "[get_data] DONE: $NUM_SHARDS train shards, $NUM_VAL val shards"
+echo "[get_data] DONE tokenize: $NUM_SHARDS train shards, $NUM_VAL val shards"
 
 if [ "$NUM_SHARDS" -lt 100 ]; then
     echo "[get_data] WARNING: only $NUM_SHARDS train shards (expected ~120). Check logs/tokenize.log for errors."
 fi
+
+# === Step 6: build n-gram tables ===
+# Static log-prob tables for the NGRAM_BIAS / NGRAM_BACKOFF infrastructure.
+# Loaded as non-persistent buffers by train.py — they do NOT count toward the
+# 16 MB submission limit. Built from the tokenized shards (CPU-bound, 1-3 min).
+# Skipped if outputs already exist.
+echo "[get_data] building n-gram log-prob tables..."
+NGRAM_VOCAB=8192 \
+NGRAM_HASH_BUCKETS=16384 \
+NGRAM_MAX_TOKENS=100000000 \
+NGRAM_DATA_DIR="$SHARDS_DIR" \
+NGRAM_OUT_DIR="data" \
+python3 -u submission/build_ngrams.py 2>&1 | tee logs/build_ngrams.log
+
+# Verify outputs
+for f in data/bigram_tab_8192v.npy data/trigram_logprobs_8192v.npy data/fourgram_logprobs_8192v.npy; do
+    if [ -f "$f" ]; then
+        echo "[get_data]   ✓ $f ($(stat -c %s "$f" 2>/dev/null || stat -f %z "$f") bytes)"
+    else
+        echo "[get_data]   ✗ MISSING $f — NGRAM_BIAS will fall back to no-op at training time"
+    fi
+done
