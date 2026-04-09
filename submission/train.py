@@ -336,7 +336,20 @@ class GPT(nn.Module):
 		# Targets the trigram bias swamping problem: model already predicts confident
 		# common contexts well, so muting the bias there frees capacity for rare contexts.
 		self._nlfi_enabled=bool(int(os.environ.get('USE_NGR_LOG_FREQ_INV','0')))
-		self._nlfi_done=False
+		self._nlfi_applied=False  # Python flag — reset on every fresh __init__
+		# SHOT 0e FIX: the n-gram bias tables (_bigram_tab etc.) are persistent=False,
+		# so the in-place mutation from NGR_LOG_FREQ_INV is LOST on serialize→deserialize.
+		# Fix: save the multipliers as PERSISTENT small buffers (16384 fp32 each = 64 KB
+		# each, ~192 KB total — well under the 16 MB cap). On deserialize, __init__
+		# reloads fresh tables from disk, state_dict load restores the multipliers,
+		# and the first forward pass re-applies them to the freshly-loaded tables.
+		# This preserves the NGR_LOG_FREQ_INV mutation across serialize boundaries.
+		# A single-int flag `_nlfi_stored_flag` tells us whether multipliers were
+		# already computed (and hence loaded from state_dict) or need fresh compute.
+		self.register_buffer('_nlfi_bigram_mult',torch.ones(self._ngram_hash,dtype=torch.float32),persistent=True)
+		self.register_buffer('_nlfi_trigram_mult',torch.ones(self._ngram_hash,dtype=torch.float32),persistent=True)
+		self.register_buffer('_nlfi_fourgram_mult',torch.ones(self._ngram_hash,dtype=torch.float32),persistent=True)
+		self.register_buffer('_nlfi_stored_flag',torch.zeros(1,dtype=torch.int64),persistent=True)
 		# CTX_PARTITIONED_TAB (NIGHT_MODE world-novel L09): 16 virtual sub-tables via
 		# slice rotation by (current_id mod S) * (HASH/S). Effectively partitions hash
 		# buckets into S zones, each absorbing 1/S of contexts → finer-grained smoothing.
@@ -404,32 +417,52 @@ class GPT(nn.Module):
 			_prev2=torch.cat([_zeros1,input_ids[:,:-1]],dim=1).reshape(-1).long()
 			_prev3=torch.cat([_zeros2,input_ids[:,:-2]],dim=1).reshape(-1).long()
 			H=self._ngram_hash
-			# NGR_LOG_FREQ_INV: one-time inverse-log-frequency bucket mutation
-			if self._nlfi_enabled and not self._nlfi_done:
+			# NGR_LOG_FREQ_INV: one-time inverse-log-frequency bucket mutation.
+			# SHOT 0e FIX: multipliers are stored in persistent buffers so they
+			# survive serialize→deserialize. On a fresh run, we compute them from
+			# the current batch. On a restored run, we use the saved multipliers.
+			# Either way, they're applied to the freshly-loaded tables.
+			if self._nlfi_enabled and not self._nlfi_applied:
 				try:
-					_bg_h_init=(_ids_flat*36313)%H
-					_bg_counts=torch.zeros(H,dtype=torch.float32,device=_ids_flat.device)
-					_bg_counts.scatter_add_(0,_bg_h_init,torch.ones_like(_bg_h_init,dtype=torch.float32))
-					_bg_mult=1.0/torch.log(2.0+_bg_counts)
-					if self._bigram_tab.dim()==2:self._bigram_tab.mul_(_bg_mult.to(self._bigram_tab.dtype).unsqueeze(1))
-					else:self._bigram_tab.mul_(_bg_mult.to(self._bigram_tab.dtype))
-					if self._trigram_tab.numel()>1:
+					if int(self._nlfi_stored_flag.item())==1:
+						# Restored from state_dict — use the saved multipliers
+						_bg_mult=self._nlfi_bigram_mult
+						_tg_mult=self._nlfi_trigram_mult
+						_fg_mult=self._nlfi_fourgram_mult
+						print('NGR_LOG_FREQ_INV: restored multipliers from state_dict',flush=True)
+					else:
+						# Fresh compute from the current batch's hash bucket counts
+						_bg_h_init=(_ids_flat*36313)%H
+						_bg_counts=torch.zeros(H,dtype=torch.float32,device=_ids_flat.device)
+						_bg_counts.scatter_add_(0,_bg_h_init,torch.ones_like(_bg_h_init,dtype=torch.float32))
+						_bg_mult=1.0/torch.log(2.0+_bg_counts)
 						_tg_h_init=((_ids_flat*36313)^((_ids_flat*39979)>>1))%H
 						_tg_counts=torch.zeros(H,dtype=torch.float32,device=_ids_flat.device)
 						_tg_counts.scatter_add_(0,_tg_h_init,torch.ones_like(_tg_h_init,dtype=torch.float32))
 						_tg_mult=1.0/torch.log(2.0+_tg_counts)
-						if self._trigram_tab.dim()==2:self._trigram_tab.mul_(_tg_mult.to(self._trigram_tab.dtype).unsqueeze(1))
-						else:self._trigram_tab.mul_(_tg_mult.to(self._trigram_tab.dtype))
-					if self._fourgram_tab.numel()>1:
 						_fg_h_init=((_ids_flat*36313)^((_ids_flat*39979)>>1)^((_ids_flat*41077)>>2))%H
 						_fg_counts=torch.zeros(H,dtype=torch.float32,device=_ids_flat.device)
 						_fg_counts.scatter_add_(0,_fg_h_init,torch.ones_like(_fg_h_init,dtype=torch.float32))
 						_fg_mult=1.0/torch.log(2.0+_fg_counts)
+						# Save to persistent buffers so serialize→deserialize preserves them
+						self._nlfi_bigram_mult.data=_bg_mult.detach().to(self._nlfi_bigram_mult.dtype)
+						self._nlfi_trigram_mult.data=_tg_mult.detach().to(self._nlfi_trigram_mult.dtype)
+						self._nlfi_fourgram_mult.data=_fg_mult.detach().to(self._nlfi_fourgram_mult.dtype)
+						self._nlfi_stored_flag.data=torch.ones(1,dtype=torch.int64,device=self._nlfi_stored_flag.device)
+						print('NGR_LOG_FREQ_INV: computed + saved multipliers from current batch',flush=True)
+					# Apply to the n-gram tables in place
+					if self._bigram_tab.numel()>1:
+						if self._bigram_tab.dim()==2:self._bigram_tab.mul_(_bg_mult.to(self._bigram_tab.dtype).unsqueeze(1))
+						else:self._bigram_tab.mul_(_bg_mult.to(self._bigram_tab.dtype))
+					if self._trigram_tab.numel()>1:
+						if self._trigram_tab.dim()==2:self._trigram_tab.mul_(_tg_mult.to(self._trigram_tab.dtype).unsqueeze(1))
+						else:self._trigram_tab.mul_(_tg_mult.to(self._trigram_tab.dtype))
+					if self._fourgram_tab.numel()>1:
 						if self._fourgram_tab.dim()==2:self._fourgram_tab.mul_(_fg_mult.to(self._fourgram_tab.dtype).unsqueeze(1))
 						else:self._fourgram_tab.mul_(_fg_mult.to(self._fourgram_tab.dtype))
-					print('NGR_LOG_FREQ_INV: mutated n-gram tables by inverse-log-freq multiplier (one-time)',flush=True)
+					print('NGR_LOG_FREQ_INV: applied mutation to n-gram tables (one-time per process)',flush=True)
 				except Exception as _e:print(f'NGR_LOG_FREQ_INV: mutation failed ({_e})',flush=True)
-				self._nlfi_done=True
+				self._nlfi_applied=True
 			_h_bi=(_ids_flat*36313)%H
 			# CTX_PARTITIONED_TAB: rotate bigram hash by per-token slice for finer smoothing
 			if self._ctx_part_tab_enabled:
