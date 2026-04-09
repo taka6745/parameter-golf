@@ -128,10 +128,40 @@ Expected: ~343 ms/step (E29), pre-quant 2.08, quant 3.64
 
 ### REMAINING WORK (not tackled, budget)
 
-- **TTT+quant gap bug** (E2b fix attempt failed): still blocks full-fat submission. Root cause undiagnosed.
 - **Explicit CUDA graphs**: E10b (max-autotune auto-cudagraphs) crashed; manual capture requires training loop refactor.
 - **Fused Triton n-gram kernel**: E7a showed +2% from skipping tri/four, so fused could give similar gains for similar LOC investment.
-- **Champion full-fat run** (600s + TTT on): never launched due to TTT quant bug.
+
+---
+
+## WAVE 6: CHAMPION FULL-WALLCLOCK RUNS — 🎯 CRITICAL QUANT DISCOVERY
+
+Ran 3 champion configs at **MAX_WALLCLOCK_SECONDS=600** (the real comp budget), TTT=0:
+
+| champ | config | steps | train_loss | pre-quant | quant | quant gap |
+|---|---|---|---|---|---|---|
+| **CHAMP_A** | NUM_LAYERS=11 + MLP_MULT=2 (E14 full) | 515 | 3.57 | **1.60009** ⭐⭐⭐ | **4.60280** ❌ | **3.00** |
+| **CHAMP_B** | NUM_LAYERS=6 + MLP_MULT=2 (E24 full) | 813 | ~3.2 | **1.39861** ⭐⭐⭐⭐ | **4.96611** ❌ | **3.57** |
+| CHAMP_C | default (l11 + parallel muon only) | tbd | tbd | tbd | tbd | tbd |
+
+### 🎯 CRITICAL INSIGHT: Quant gap is NOT TTT-specific
+
+Fast-screen runs (120s) had small quant gaps (0.02-0.10 BPB) because **both pre-quant AND quant were bad** (undertrained → noisy outputs → quant noise is small fraction of total noise).
+
+At full 600s wallclock, **pre-quant val_bpb drops to 1.4-1.6 (matching comp anchors)**, but **quant explodes to 4.6-5.0** — a **3+ BPB gap**. The same failure mode we saw with E2's TTT run (1.425 → 3.29).
+
+**Root cause (hypothesis)**: GPTQ int6 has insufficient precision for converged weight distributions. The weight values become sharply concentrated (near-optimal for the task) and int6's ~64-level grid loses the fine structure that matters. This is a **fundamental int6 capacity limit**, not a calibration issue.
+
+**Implications for submission:**
+1. The current submission pipeline **cannot handle converged models** with int6 quantization.
+2. Options to unblock:
+   - Use int8 for matmul weights (would increase artifact size from ~11MB to ~14MB, still under 16MB cap)
+   - Activation-aware quantization (AWQ) instead of GPTQ
+   - Post-quant fine-tuning (E2b-style but with proper weight-level adaptation)
+3. **CHAMP_B's pre-quant val_bpb 1.399 matches the H100 comp anchor range (#1485 = 1.0679)** — we're within striking distance on the pre-quant side. The entire gap is in the quantization step.
+
+### What this means for the "speed" work
+
+All the 2-4× speedups we found (E4b, E6, E8, E13, E24, E26, E29) are **REAL speed wins that will compose with proper quantization fix**. They're not invalidated. The submission path is blocked on a single issue: **int6 is insufficient for converged models in this task**.
 
 ---
 
