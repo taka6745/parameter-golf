@@ -80,6 +80,13 @@ All wave 2 experiments are env-var-only; no new code needed. Per-experiment runt
 
 **Key insight from wave 1**: 3090 is **compute-bound**. Bigger batches (E8d), bf16 (E11), coord descent (E8c) don't help speed. Real wins come from **cutting compute** (NUM_LOOPS in E8, Parallel Muon in E6) or **kernel fusion** (max-autotune in E4b). Wave 2 tests aggressive compute-cutting via smaller model dimensions.
 
+**Waves 2-5 done.** Summary in PHASE2_RESULTS.md "FINAL SUMMARY" section. Speed podium: E29 (8.55×), E28 (5.16×), E26 (4.56×). Submission podium (best quant): E14 (3.027), E4b (3.017).
+
+**Wave 6 CHAMPION runs** (full 600s wallclock) launched 19:28Z:
+- CHAMP_A (l11+m2, E14 at full time) — train phase DONE, 515 steps, train_loss 3.57 (vs fast-screen 5.47)
+- CHAMP_B (l6+m2, E24 at full time) — queued
+- CHAMP_C (E6 baseline at full time) — queued
+
 **WAVE 3 plan** (after wave 2 results, for future cron fires):
 - Stack the best wave 2 winner with E6 + E8 + E4b config into a true champion run
 - Try explicit CUDA graph capture if we have time (requires fixing remaining rotary/state issues)
