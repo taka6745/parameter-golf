@@ -17,7 +17,8 @@
 | **E2** | S1 | torch.compile on (+ layer_loop + prefetch) | — | +25-35% | ✅ done | **1581 (1.85×)** | post-TTT val_bpb 1.425 matches H100 reference |
 | **E3** | S17 | fuzzy LR bandit | 21 | ??? | ❌ done (SKIP) | 1592 | lost A/B vs E2 (+0.07 train_loss at step 30) |
 | **E2b** | — | GPTQ val-calib for TTT quant gap fix | 26 | bug fix | ❌ done (FAIL) | 1588 | gap only moved 0.014 BPB (1.866→1.852), hypothesis rejected |
-| **E4** | NEW | `torch.compile(mode='max-autotune')` | 1 | +5-15% | **running** | | launched 1029Z, PID 3895793. `TORCH_COMPILE_MODE=max-autotune` confirmed in log. In pre-train warmup. ETA ~1045Z. |
+| **E4** | NEW | `torch.compile(mode='max-autotune')` | 1 | +5-15% | ❌ **failed** | | CUDA graphs conflict with rotary embedding caching pattern (`self._cos_cached = freqs.cos()[...]` at train.py:231 gets overwritten by subsequent graph runs). Crashed 1034Z. |
+| **E4b** | NEW | `torch.compile(mode='max-autotune-no-cudagraphs')` | 0 (env only) | +3-10% | **running** | | launched ~1045Z, PID 3907929. Same max-autotune kernel tuning without CUDA graphs. |
 | **E5** | NEW | `cudnn.benchmark=True` + TF32 matmul precision + inductor flags | 5 | +3-8% | pending | | Ampere-tuned inductor switches |
 | **E6** | S10 | Parameter Banking + Parallel Muon (batch NS across shape-matched params) | 150 | +10-20% | pending_wip | | big coding effort |
 | **E7** | S4 | Fused n-gram bias Triton kernel (~200 kernel launches/step currently) | 150 | +5-10% | pending | | Triton works on 3090 |
