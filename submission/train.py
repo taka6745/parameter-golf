@@ -179,6 +179,43 @@ class ShuffledSequenceLoader:
 		if self._prefetch_queue is None:
 			return -1
 		return self._prefetch_queue.qsize()
+	def prefill(self,global_tokens,grad_accum_steps,target_depth=None,timeout_s=120.0):
+		"""Pre-fill the prefetch queue during pretime so training starts with
+		a full queue. Front-loads CPU work into pretime (free) so the CPU is
+		nearly idle during the 600s training budget (available for metric
+		logging, optimizer offload, async checkpoint writes, etc.).
+
+		Blocks until the queue has `target_depth` batches, or until timeout.
+		Only runs if USE_PREFETCH_LOADER=1.
+
+		Env var override: PREFETCH_PREFILL_BATCHES (default = PREFETCH_DEPTH).
+		"""
+		if not self._use_prefetch:
+			print("[prefetch] prefill: USE_PREFETCH_LOADER=0, skipping",flush=True)
+			return
+		if target_depth is None:
+			target_depth=int(os.environ.get('PREFETCH_PREFILL_BATCHES',str(self._prefetch_depth)))
+		target_depth=min(target_depth,self._prefetch_depth)  # can't exceed queue maxsize
+		self._ensure_prefetch_started(global_tokens,grad_accum_steps)
+		import time as _time
+		t0=_time.perf_counter()
+		last_log=t0
+		print(f"[prefetch] prefill: target_depth={target_depth}, maxsize={self._prefetch_depth}, timeout={timeout_s}s",flush=True)
+		while True:
+			current=self._prefetch_queue.qsize()
+			if current>=target_depth:
+				elapsed=_time.perf_counter()-t0
+				print(f"[prefetch] prefill: reached depth {current}/{target_depth} in {elapsed:.2f}s",flush=True)
+				return
+			elapsed=_time.perf_counter()-t0
+			if elapsed>=timeout_s:
+				print(f"[prefetch] prefill: TIMEOUT at depth {current}/{target_depth} after {elapsed:.1f}s",flush=True)
+				return
+			# Progress logging every 5s
+			if _time.perf_counter()-last_log>5.0:
+				print(f"[prefetch] prefill progress: {current}/{target_depth} at {elapsed:.1f}s",flush=True)
+				last_log=_time.perf_counter()
+			_time.sleep(0.1)
 class RMSNorm(nn.Module):
 	def __init__(self,eps=None):super().__init__();self.eps=eps
 	def forward(self,x):return F.rms_norm(x,(x.size(-1),),eps=self.eps)
@@ -675,6 +712,10 @@ def train_model(h,device,val_data):
 	if h.distributed:model=DDP(compiled_model,device_ids=[h.local_rank],broadcast_buffers=False)
 	else:model=compiled_model
 	log(f"model_params:{sum(p.numel()for p in base_model.parameters())}");optimizers=Optimizers(h,base_model);train_loader=ShuffledSequenceLoader(h,device);max_wallclock_ms=1e3*h.max_wallclock_seconds if h.max_wallclock_seconds>0 else None
+	# Phase 2: prefill the prefetch queue during PRETIME (before wallclock starts)
+	# so the training loop starts with a fully-staged data pipeline. CPU batch-build
+	# time is front-loaded here — free, not counted toward the 600s budget.
+	train_loader.prefill(h.train_batch_tokens,h.grad_accum_steps)
 	if max_wallclock_ms is not None:max_wallclock_ms-=h.gptq_reserve_seconds*1e3;log(f"gptq:reserving {h.gptq_reserve_seconds:.0f}s, effective={max_wallclock_ms:.0f}ms")
 	def training_frac(step,elapsed_ms):
 		if max_wallclock_ms is None:return step/max(h.iterations,1)

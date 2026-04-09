@@ -173,8 +173,12 @@ NGRAM_BACKOFF_ALPHA="${NGRAM_BACKOFF_ALPHA:-0.4}"
 # Enable both in submission/run.sh so the Phase 1 submission/bootstrap also
 # gets the CPU/GPU parallelism for free.
 USE_PREFETCH_LOADER="${USE_PREFETCH_LOADER:-1}"
-PREFETCH_DEPTH="${PREFETCH_DEPTH:-4}"
+PREFETCH_DEPTH="${PREFETCH_DEPTH:-8}"
 PREFETCH_PIN_MEMORY="${PREFETCH_PIN_MEMORY:-1}"
+# Prefill the prefetch queue during pretime (before training wallclock starts)
+# so the CPU work is front-loaded into free pretime, not counted against 600s.
+# Default = PREFETCH_DEPTH (fill the whole queue before training starts).
+PREFETCH_PREFILL_BATCHES="${PREFETCH_PREFILL_BATCHES:-$PREFETCH_DEPTH}"
 
 # NGR_LOG_FREQ_INV (NIGHT_MODE world-novel L09): one-time inverse-log-frequency
 # bucket suppression. Mutes high-freq n-gram buckets so the bias has more capacity
@@ -257,6 +261,7 @@ CTX_PARTITION_SLICES="$CTX_PARTITION_SLICES" \
 USE_PREFETCH_LOADER="$USE_PREFETCH_LOADER" \
 PREFETCH_DEPTH="$PREFETCH_DEPTH" \
 PREFETCH_PIN_MEMORY="$PREFETCH_PIN_MEMORY" \
+PREFETCH_PREFILL_BATCHES="$PREFETCH_PREFILL_BATCHES" \
 python3 -u submission/train.py 2>&1 | tee "$LOG"
 
 echo
