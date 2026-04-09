@@ -163,6 +163,24 @@ At full 600s wallclock, **pre-quant val_bpb drops to 1.4-1.6 (matching comp anch
 
 All the 2-4× speedups we found (E4b, E6, E8, E13, E24, E26, E29) are **REAL speed wins that will compose with proper quantization fix**. They're not invalidated. The submission path is blocked on a single issue: **int6 is insufficient for converged models in this task**.
 
+### Wave 6 CHAMP_C:
+| champ | steps | pre-quant | quant | gap |
+|---|---|---|---|---|
+| CHAMP_C (default + parallel muon) | 431 | 1.70394 | 4.80068 | 3.10 |
+
+**All 3 champion runs show the same pattern**: excellent pre-quant (1.4-1.7) + catastrophic quant (4.6-5.0).
+
+## WAVE 7: INT8 QUANT RESCUE (in progress)
+
+Launching two experiments with **MATRIX_BITS=8** (int8 weight quantization) + `USE_CMP_QUANT_VALUE_DEDUP=0` (disable alphabet compression):
+
+- **CHAMP_D**: CHAMP_B config + int8 weights (l6+m2, 600s)
+- **CHAMP_E**: CHAMP_A config + int8 weights (l11+m2, 600s)
+
+**Hypothesis**: int6's 64-level grid loses the fine structure that converged weights need. int8's 256-level grid should preserve signal. Artifact size grows from ~11.6 MB to ~15.5 MB, under the 16 MB cap.
+
+**If this works**: CHAMP_D could finalize with pre-quant ~1.40 AND quant ~1.45 (normal int8 gap ~0.05). That's **submission-grade** val_bpb in the comp anchor range.
+
 ---
 
 ## Phase 1 baseline context
