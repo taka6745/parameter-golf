@@ -73,6 +73,30 @@ VOCAB_SIZE="${VOCAB_SIZE:-8192}"
 TORCH_COMPILE_DISABLE="${TORCH_COMPILE_DISABLE:-1}"
 TORCHDYNAMO_DISABLE="${TORCHDYNAMO_DISABLE:-1}"
 
+# === Phase 2 free env-var wins (zero risk, zero LOC, +~10% step time) ===
+# PR #1420 (@abaybektursun) traced an Inductor regression specific to this
+# comp's shape and landed two upstream PyTorch patches (pytorch#179494,
+# pytorch#179422). Setting TORCHINDUCTOR_MIX_ORDER_REDUCTION=0 disables the
+# regressed Inductor pass → +5.93 ms/step (+8.8%) on H100 per their benchmark.
+# Safe fallback: if the env var doesn't exist in our torch version it's a no-op.
+export TORCHINDUCTOR_MIX_ORDER_REDUCTION=0
+
+# PyTorch CUDA allocator: expandable segments reduce fragmentation and avoid
+# cudaMalloc stalls during training. backend:cudaMallocAsync uses the async
+# allocator which overlaps H2D with compute. Both zero-risk.
+# NOTE: don't set if already set by the user — respect their override.
+if [ -z "${PYTORCH_CUDA_ALLOC_CONF:-}" ]; then
+    export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,garbage_collection_threshold:0.8"
+fi
+
+# Honest note on grad_accum: the research agent suggested dropping
+# grad_accum_steps from 8 → 1 for world_size=1 as a "free 30-50% win". Memory
+# math kills that: current peak is 56 GB at microbatch=48 seqs; going to
+# microbatch=384 (grad_accum=1) would need ~448 GB and blow H100 80GB 8×.
+# We KEEP grad_accum_steps=8 for world_size=1 at the current 786432 train
+# batch token count. If we shrink TRAIN_BATCH_TOKENS (changes effective
+# batch size + training dynamics) we can revisit.
+
 # === Comp frontier env-var bumps (chunk 1, from PHASE1_NOVELTY_AUDIT.md) ===
 # C2: 3-layer depth recurrence (was loop_start=4, loop_end=5 → 2 looped layers)
 #     PR #1485 / #1471 / #1437 use loop_start=3, loop_end=5 → 3 looped layers,
