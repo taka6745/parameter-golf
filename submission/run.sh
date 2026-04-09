@@ -100,6 +100,19 @@ USE_GATED_ATTENTION="${USE_GATED_ATTENTION:-1}"
 # BEFORE NS = MuonEq-R). NIGHT_MODE n=2 confirmed-win 1.40995, Mac SETUP §50.
 USE_NORMUON="${USE_NORMUON:-1}"
 
+# === C1: Pre-Quant AdamW TTT (the -0.014 BPB lever, biggest free delta) ===
+# Adapts the EMA-applied weights on val tokens with AdamW + cosine schedule
+# BEFORE GPTQ, so the adaptation bakes into the quantized weights.
+# Defaults match PR #1482 frontier (val_bpb 1.0787): epochs=8, lr=0.00045,
+# freeze_blocks=1. Runs after pre-quant eval, before serialize.
+PREQUANT_TTT_ENABLED="${PREQUANT_TTT_ENABLED:-1}"
+PREQUANT_TTT_LR="${PREQUANT_TTT_LR:-0.00045}"
+PREQUANT_TTT_EPOCHS="${PREQUANT_TTT_EPOCHS:-8}"
+PREQUANT_TTT_FREEZE_BLOCKS="${PREQUANT_TTT_FREEZE_BLOCKS:-1}"
+PREQUANT_TTT_BATCH_SEQS="${PREQUANT_TTT_BATCH_SEQS:-32}"
+PREQUANT_TTT_GRAD_CLIP="${PREQUANT_TTT_GRAD_CLIP:-1.0}"
+PREQUANT_TTT_COSINE_DECAY="${PREQUANT_TTT_COSINE_DECAY:-1}"
+
 # === DRY_RUN mode for fast smoke testing (60s wallclock, no TTT, no real eval) ===
 if [ "${DRY_RUN:-0}" = "1" ]; then
     echo "[run] DRY_RUN=1 — 60s smoke test"
@@ -119,6 +132,7 @@ echo "  LOOP_START=$LOOP_START LOOP_END=$LOOP_END NUM_LOOPS=$NUM_LOOPS  (C2: 3-l
 echo "  QK_GAIN_INIT=$QK_GAIN_INIT  (C3: bumped from 4)"
 echo "  USE_GATED_ATTENTION=$USE_GATED_ATTENTION  (NIGHT_MODE champion lever)"
 echo "  USE_NORMUON=$USE_NORMUON  (NIGHT_MODE n=2 confirmed)"
+echo "  PREQUANT_TTT_ENABLED=$PREQUANT_TTT_ENABLED epochs=$PREQUANT_TTT_EPOCHS lr=$PREQUANT_TTT_LR freeze=$PREQUANT_TTT_FREEZE_BLOCKS  (C1: -0.014 BPB lever)"
 
 LOG="logs/run_seed${SEED}_$(date -u +%Y%m%dT%H%M%SZ).log"
 
@@ -139,6 +153,13 @@ NUM_LOOPS="$NUM_LOOPS" \
 QK_GAIN_INIT="$QK_GAIN_INIT" \
 USE_GATED_ATTENTION="$USE_GATED_ATTENTION" \
 USE_NORMUON="$USE_NORMUON" \
+PREQUANT_TTT_ENABLED="$PREQUANT_TTT_ENABLED" \
+PREQUANT_TTT_LR="$PREQUANT_TTT_LR" \
+PREQUANT_TTT_EPOCHS="$PREQUANT_TTT_EPOCHS" \
+PREQUANT_TTT_FREEZE_BLOCKS="$PREQUANT_TTT_FREEZE_BLOCKS" \
+PREQUANT_TTT_BATCH_SEQS="$PREQUANT_TTT_BATCH_SEQS" \
+PREQUANT_TTT_GRAD_CLIP="$PREQUANT_TTT_GRAD_CLIP" \
+PREQUANT_TTT_COSINE_DECAY="$PREQUANT_TTT_COSINE_DECAY" \
 python3 -u submission/train.py 2>&1 | tee "$LOG"
 
 echo
