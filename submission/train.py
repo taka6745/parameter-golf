@@ -665,10 +665,33 @@ def _decompress(data,compressor):
 	elif compressor=='brotli':import brotli;raw=brotli.decompress(data)
 	else:raise ValueError(f"Unknown compressor: {compressor!r}")
 	raw=_byte_unshuffle(raw);return raw
-def serialize(h,base_model,code):
+class _ValCalibLoader:
+	# SHOT 0e follow-up: val-token calibration loader for GPTQ. Use this instead
+	# of the train ShuffledSequenceLoader when the model has been TTT-adapted,
+	# so the Hessian estimates match the val distribution the weights were
+	# adapted to. Prevents GPTQ from quantizing away TTT's val-specific updates.
+	def __init__(self,val_tokens,h,device):
+		self.val_tokens=val_tokens;self.h=h;self.device=device;self._offset=0
+	def next_batch(self,batch_tokens,grad_accum_steps):
+		seq_len=self.h.train_seq_len
+		batch_seqs=max(1,batch_tokens//(seq_len*max(1,grad_accum_steps)))
+		needed=batch_seqs*seq_len+1
+		if self._offset+needed>self.val_tokens.numel():self._offset=0
+		chunk=self.val_tokens[self._offset:self._offset+needed].to(device=self.device,dtype=torch.int64)
+		x=chunk[:-1].reshape(-1,seq_len);y=chunk[1:].reshape(-1,seq_len);self._offset+=needed-1
+		return x,y
+def serialize(h,base_model,code,val_data=None):
 	code_bytes=len(code.encode('utf-8'))
 	if h.is_main_process:torch.save(base_model.state_dict(),h.model_path);model_bytes=os.path.getsize(h.model_path);log(f"Serialized model: {model_bytes} bytes");log(f"Code size: {code_bytes} bytes")
-	sd_cpu={k:v.detach().cpu()for(k,v)in base_model.state_dict().items()};device=torch.device('cuda',h.local_rank);log('GPTQ:collecting Hessians from calibration data...');t0=time.perf_counter();calib_loader=ShuffledSequenceLoader(h,device);hessians=collect_hessians(base_model,calib_loader,h,device,n_calibration_batches=h.gptq_calibration_batches);log(f"GPTQ:collected {len(hessians)} Hessians in {time.perf_counter()-t0:.1f}s");quant_result,quant_meta=gptq_mixed_quantize(sd_cpu,hessians,h);quant_buf=io.BytesIO();torch.save({'w':quant_result,'m':quant_meta},quant_buf);quant_raw=quant_buf.getvalue();quant_blob=_compress(quant_raw,h.compressor);quant_file_bytes=len(quant_blob);bytes_total=quant_file_bytes+code_bytes
+	sd_cpu={k:v.detach().cpu()for(k,v)in base_model.state_dict().items()};device=torch.device('cuda',h.local_rank)
+	_use_val_calib=int(os.environ.get('GPTQ_CALIB_USE_VAL','0'))and val_data is not None
+	if _use_val_calib:
+		log('GPTQ_CALIB_USE_VAL=1: calibrating Hessians on val tokens (preserves TTT adaptation through int6 quant)')
+		calib_loader=_ValCalibLoader(val_data.val_tokens,h,device)
+	else:
+		log('GPTQ:collecting Hessians from calibration data...')
+		calib_loader=ShuffledSequenceLoader(h,device)
+	t0=time.perf_counter();hessians=collect_hessians(base_model,calib_loader,h,device,n_calibration_batches=h.gptq_calibration_batches);log(f"GPTQ:collected {len(hessians)} Hessians in {time.perf_counter()-t0:.1f}s");quant_result,quant_meta=gptq_mixed_quantize(sd_cpu,hessians,h);quant_buf=io.BytesIO();torch.save({'w':quant_result,'m':quant_meta},quant_buf);quant_raw=quant_buf.getvalue();quant_blob=_compress(quant_raw,h.compressor);quant_file_bytes=len(quant_blob);bytes_total=quant_file_bytes+code_bytes
 	if h.is_main_process:
 		with open(h.quantized_model_path,'wb')as f:f.write(quant_blob)
 		log(f"Serialized model quantized+{h.compressor}: {quant_file_bytes} bytes");log(f"Total submission size quantized+{h.compressor}: {bytes_total} bytes")
@@ -906,7 +929,7 @@ def train_and_eval(h,device):
 		prequant_ttt_adapt_adamw(h,base_model,device,val_data.val_tokens,rank=h.rank,world_size=h.world_size)
 		torch._dynamo.reset()
 		timed_eval('post-prequant-ttt',eval_val,h,device,val_data,base_model)
-	serialize(h,base_model,Path(__file__).read_text(encoding='utf-8'))
+	serialize(h,base_model,Path(__file__).read_text(encoding='utf-8'),val_data=val_data)
 	if h.distributed:dist.barrier()
 	eval_model=deserialize(h,device)
 	if h.num_loops>0:eval_model.looping_active=True
