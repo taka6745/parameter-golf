@@ -846,13 +846,29 @@ def eval_val_sliding_ttt(h,base_model,rank,world_size,device,val_data,stride):
 	for p in base_model.parameters():p.requires_grad_(True)
 	base_model.eval();log(f"ttt_sliding:done val_loss={val_loss:.6f}{ val_bpb=:.6f} elapsed={time.perf_counter()-t0:.1f}s");return val_loss,val_bpb
 def timed_eval(label,fn,*args,**kwargs):torch.cuda.synchronize();t0=time.perf_counter();val_loss,val_bpb=fn(*args,**kwargs);torch.cuda.synchronize();elapsed_ms=1e3*(time.perf_counter()-t0);log(f"{label} val_loss:{val_loss:.8f} val_bpb:{val_bpb:.8f} eval_time:{elapsed_ms:.0f}ms");return val_loss,val_bpb
+def _load_train_sample_for_nlfi(h,device):
+	"""RULE COMPLIANCE: NLFI bias mutation must use TRAIN data, not val (the comp
+	rules forbid accessing val data during training). Loads the first eval_seq_len
+	tokens from the first train shard. Deterministic, so train-side and eval-side
+	NLFI setup compute matching multipliers."""
+	try:
+		_train_files=sorted(Path(h.datasets_dir).resolve().glob('fineweb_train_*.bin'))
+		if not _train_files:return None
+		_arr=np.fromfile(str(_train_files[0]),dtype=np.uint16,count=h.eval_seq_len)
+		if _arr.size<h.eval_seq_len:return None
+		return torch.from_numpy(_arr.astype(np.int64)).to(device).view(1,-1)
+	except Exception as _e:
+		print(f'NLFI: train sample load failed ({_e}), falling back to no setup',flush=True)
+		return None
 def train_model(h,device,val_data):
 	base_model=GPT(h).to(device).bfloat16();restore_fp32_params(base_model)
 	# SHOT 0e: run NLFI one-time setup eagerly BEFORE torch.compile so the
 	# compiled forward never sees .item() (which graph-breaks fullgraph=True).
+	# RULE COMPLIANCE: NLFI sample must come from TRAIN data, not val.
 	if getattr(base_model,'_nlfi_enabled',False) and not getattr(base_model,'_nlfi_applied',False):
-		_sample=val_data.val_tokens[:h.eval_seq_len].to(device=device,dtype=torch.int64).view(1,-1)
-		base_model._apply_nlfi_once(_sample)
+		_sample=_load_train_sample_for_nlfi(h,device)
+		if _sample is not None:
+			base_model._apply_nlfi_once(_sample)
 	# E4/SPEED: torch.compile mode selectable via env. 'max-autotune' does more
 	# kernel autotuning up-front (longer first-compile cost, faster steady-state
 	# steps). Cache is persistent so first-compile cost is paid once.
@@ -1021,9 +1037,11 @@ def train_and_eval(h,device):
 	# SHOT 0e: same eager NLFI setup on the deserialized eval model before compile.
 	# After serialize→deserialize, _nlfi_stored_flag should be 1 (restored from
 	# state_dict), so this takes the "restored multipliers" branch.
+	# RULE COMPLIANCE: same train sample as the train_model side.
 	if getattr(eval_model,'_nlfi_enabled',False) and not getattr(eval_model,'_nlfi_applied',False):
-		_sample=val_data.val_tokens[:h.eval_seq_len].to(device=device,dtype=torch.int64).view(1,-1)
-		eval_model._apply_nlfi_once(_sample)
+		_sample=_load_train_sample_for_nlfi(h,device)
+		if _sample is not None:
+			eval_model._apply_nlfi_once(_sample)
 	compiled_model=torch.compile(eval_model,dynamic=False,fullgraph=True);timed_eval('quantized',eval_val,h,device,val_data,compiled_model)
 	if h.sliding_window_enabled:timed_eval('quantized_sliding_window',eval_val_sliding,h,device,val_data,eval_model)
 	if h.ttt_enabled:
