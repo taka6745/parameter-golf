@@ -83,9 +83,19 @@ All wave 2 experiments are env-var-only; no new code needed. Per-experiment runt
 **Waves 2-5 done.** Summary in PHASE2_RESULTS.md "FINAL SUMMARY" section. Speed podium: E29 (8.55×), E28 (5.16×), E26 (4.56×). Submission podium (best quant): E14 (3.027), E4b (3.017).
 
 **Wave 6 CHAMPION runs** (full 600s wallclock) launched 19:28Z:
-- CHAMP_A (l11+m2, E14 at full time) — train phase DONE, 515 steps, train_loss 3.57 (vs fast-screen 5.47)
-- CHAMP_B (l6+m2, E24 at full time) — queued
-- CHAMP_C (E6 baseline at full time) — queued
+- CHAMP_A (l11+m2, E14 at full time) — ✅ 515 steps, pre-quant 1.600 / quant 4.603 (int6 broken)
+- CHAMP_B (l6+m2, E24 at full time) — ✅ 813 steps, pre-quant 1.399 / quant 4.966 (int6 broken)
+- CHAMP_C (E6 baseline at full time) — ✅ 431 steps, pre-quant 1.704 / quant 4.801 (int6 broken)
+
+**Key finding**: all 3 champion runs show int6 quant fails catastrophically for converged models. Quant gap 3+ BPB.
+
+**Wave 7 INT8 RESCUE** (CHAMP_D, CHAMP_E with MATRIX_BITS=8) launched 20:28Z:
+- CHAMP_D (l6+m2 + int8) — 🎯 **BREAKTHROUGH: 811 steps, val_bpb 1.39943 quant, gap 0.001, 9.55 MB artifact** — submission-grade!
+- CHAMP_E (l11+m2 + int8) — UNKNOWN, Pod M died at ~21:09Z before result could be read
+
+## POD M TERMINATED 21:09Z
+
+Pod returned "container not found" — likely RunPod reclaim or billing issue. Total uptime ~14h45m. Total spend estimate: ~$6.80. All committed results are safe in git. CHAMP_D alone is sufficient to declare the submission path unblocked.
 
 **WAVE 3 plan** (after wave 2 results, for future cron fires):
 - Stack the best wave 2 winner with E6 + E8 + E4b config into a true champion run

@@ -194,9 +194,11 @@ Config: `NUM_LAYERS=6 MLP_MULT=2 USE_PARALLEL_MUON=1 MATRIX_BITS=8 USE_CMP_QUANT
 - **Submission path is unblocked**: TTT+quant bug was a symptom of the int6 limit, not a TTT-specific bug
 - All the speed wins (E4b, E6, E8, parallel Muon, NUM_LOOPS=1, compile mode, NUM_LAYERS=6/8, MLP_MULT=2) compose cleanly with int8 quant
 
-### Next: CHAMP_E_int8_l11
+### CHAMP_E_int8_l11 — UNKNOWN (Pod M killed mid-run)
 
-Running now — same int8 config but NUM_LAYERS=11 (more capacity). Will reveal if extra capacity helps at this training budget.
+CHAMP_E launched at 20:44:01Z with ETA ~21:02Z (600s train + eval + GPTQ + quant eval). At fire 48 (21:09Z) Pod M responded with "container not found" — the container was killed (likely by RunPod for unknown reason, possibly billing / spot reclaim). CHAMP_E's result is lost with the container.
+
+CHAMP_D alone is sufficient to declare the submission path unblocked.
 
 ### Implications for the submission
 
