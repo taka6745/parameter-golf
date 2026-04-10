@@ -107,6 +107,8 @@ Spun up 23:11Z to test CHAMP_F: CHAMP_D config + Pre-Quant TTT 8 epochs (the mis
 
 **00:11Z fire**: still SP-training phase. Done: normalization (20.5B chars), now "Tokenizing input sentences with whitespace: 12426626" — sub-step before BPE merges. 0/3 ngram files. CHAMP_F start ETA pushed to ~01:00-01:15Z. Spend ~$0.30.
 
+**00:32Z fire**: SP-8192 **BPE merge phase** now running (past whitespace tokenize). Last log: `Added: freq=4599403 size=400 all=95867 piece=▁acc` — vocab slot **400/8192** (~5%). GPU 0% (SP is CPU-only, single-threaded). No .npy / .bin files yet, no SP model on disk yet. CHAMP_F training start ETA **02:00-02:30Z** (BPE merge cost grows per-slot). Spend ~$0.44.
+
 **WAVE 3 plan** (after wave 2 results, for future cron fires):
 - Stack the best wave 2 winner with E6 + E8 + E4b config into a true champion run
 - Try explicit CUDA graph capture if we have time (requires fixing remaining rotary/state issues)
