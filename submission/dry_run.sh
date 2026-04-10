@@ -100,8 +100,17 @@ export MATRIX_LR=0.022                      # PR #1493 (we default to 0.020)
 
 # Our discovered speed wins
 export USE_PARALLEL_MUON=1                  # batched Newton-Schulz
-export TORCH_COMPILE_MODE=max-autotune-no-cudagraphs
-export USE_CUDNN_BENCHMARK=1
+# CRITICAL: run.sh defaults TORCH_COMPILE_DISABLE=1 and TORCHDYNAMO_DISABLE=1.
+# Setting TORCH_COMPILE_MODE alone does NOT re-enable compile -- the disable
+# flags override. We MUST explicitly set both to 0 here. PHASE2_RESULTS E2/E4b
+# measured 1.85-1.92x speedup from torch.compile on RTX 3090. On 8xH100 SXM
+# with our 11L+4x model the speedup is in the 3-5x range. Without compile we
+# get half the training steps PR #1493 gets in 600s -> catastrophic for
+# convergence. THIS WAS THE BIGGEST DROPPED WIN.
+export TORCH_COMPILE_DISABLE=0              # CRITICAL re-enable (run.sh default is 1)
+export TORCHDYNAMO_DISABLE=0                # CRITICAL re-enable (run.sh default is 1)
+export TORCH_COMPILE_MODE=max-autotune-no-cudagraphs   # +3.7% over default mode (E4b)
+export USE_CUDNN_BENCHMARK=1                # +0.8% incremental (E5)
 
 # Our discovered quant fix (int8 instead of int6 — preserves converged quality)
 # CMP_QUANT_VALUE_DEDUP RE-ENABLED: NIGHT_MODE n=2 confirmed L10 world-novel,
