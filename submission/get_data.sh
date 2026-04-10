@@ -35,8 +35,11 @@ mkdir -p "$DATA_BIG" /root/sp_models data/datasets/tokenizers data/datasets/data
 # The committed cached model lives at submission/cached/fineweb_8192_bpe.model.
 # Copy it into the runtime tokenizer path so the existing reuse logic at Step 3
 # below picks it up. Skipped if a runtime model is already in place.
+# CRITICAL: mkdir -p the parent FIRST or the cp fails on a fresh pod (the
+# tokenizers/ dir is not yet created at this point in the script).
 if [ -f "$SP_MODEL_CACHED" ] && [ ! -f "$SP_MODEL_REPO" ]; then
     echo "[get_data] seeding cached SP-8192 model from $SP_MODEL_CACHED (skips ~60 min rebuild)"
+    mkdir -p "$(dirname "$SP_MODEL_REPO")"
     cp "$SP_MODEL_CACHED" "$SP_MODEL_REPO"
 fi
 
