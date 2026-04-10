@@ -109,6 +109,12 @@ Spun up 23:11Z to test CHAMP_F: CHAMP_D config + Pre-Quant TTT 8 epochs (the mis
 
 **00:32Z fire**: SP-8192 **BPE merge phase** now running (past whitespace tokenize). Last log: `Added: freq=4599403 size=400 all=95867 piece=▁acc` — vocab slot **400/8192** (~5%). GPU 0% (SP is CPU-only, single-threaded). No .npy / .bin files yet, no SP model on disk yet. CHAMP_F training start ETA **02:00-02:30Z** (BPE merge cost grows per-slot). Spend ~$0.44.
 
+**00:46Z**: SP-8192 build COMPLETED (~1h29m total: norm + whitespace-tokenize + BPE merges). Model file at /workspace/paramgolf/data/datasets/tokenizers/fineweb_8192_bpe.model (371 KB). Harvested + committed to git as submission/cached/fineweb_8192_bpe.model in commit b931179. Pod N killed. Future fresh pods will skip the SP build.
+
+---
+
+**Phase 2 work is complete.** The current REAL SUBMISSION run on 8xH100 SXM is tracked in SUBMISSION_RUN_STATE.md, not here.
+
 **WAVE 3 plan** (after wave 2 results, for future cron fires):
 - Stack the best wave 2 winner with E6 + E8 + E4b config into a true champion run
 - Try explicit CUDA graph capture if we have time (requires fixing remaining rotary/state issues)
