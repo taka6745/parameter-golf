@@ -241,6 +241,22 @@ echo "  MATRIX_BITS=${MATRIX_BITS:-6} USE_PARALLEL_MUON=${USE_PARALLEL_MUON:-0} 
 
 LOG="logs/run_seed${SEED}_$(date -u +%Y%m%dT%H%M%SZ).log"
 
+# === multi-GPU launcher detection ===
+# Auto-detect GPU count and use torchrun when >1. Without this, we silently
+# train on a single GPU even on 8xH100 SXM (the comp hardware!) and waste
+# 7/8 of the rented compute. PR #1493 launches with `torchrun --standalone
+# --nproc_per_node=8 train_gpt.py` for exactly this reason. train.py supports
+# distributed via WORLD_SIZE/RANK/LOCAL_RANK env vars set by torchrun.
+NPROC_PER_NODE="${NPROC_PER_NODE:-$(nvidia-smi --query-gpu=name --format=csv,noheader 2>/dev/null | wc -l)}"
+NPROC_PER_NODE="${NPROC_PER_NODE:-1}"
+if [ "$NPROC_PER_NODE" -gt 1 ]; then
+    LAUNCHER="torchrun --standalone --nproc-per-node=$NPROC_PER_NODE"
+    echo "[run] launcher: $LAUNCHER (multi-GPU)"
+else
+    LAUNCHER="python3 -u"
+    echo "[run] launcher: $LAUNCHER (single GPU)"
+fi
+
 echo "[run] launching train.py at $(date -u +%H:%M:%SZ)"
 echo "[run] log: $LOG"
 
@@ -286,7 +302,7 @@ PREFETCH_DEPTH="$PREFETCH_DEPTH" \
 PREFETCH_PIN_MEMORY="$PREFETCH_PIN_MEMORY" \
 PREFETCH_PREFILL_BATCHES="$PREFETCH_PREFILL_BATCHES" \
 USE_PARALLEL_RESIDUALS="$USE_PARALLEL_RESIDUALS" \
-python3 -u submission/train.py 2>&1 | tee "$LOG"
+$LAUNCHER submission/train.py 2>&1 | tee "$LOG"
 
 echo
 echo "[run] DONE $(date -u +%H:%M:%SZ)"
