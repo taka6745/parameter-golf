@@ -17,18 +17,20 @@
 # (merged leaderboard #1, val_bpb 1.0810 on 8×H100 SXM) plus our deltas:
 #   PR #1493 stack (verified from openai/parameter-golf merged PR):
 #   - SP8192 vocab
+#   - NUM_LAYERS=11, MLP_MULT=4 (matches PR #1493 architecture)
 #   - 3-Layer Depth Recurrence (NUM_LOOPS=2, LOOP_START=3, LOOP_END=5)
-#   - Parallel Residuals (PR #1493 applies L7+; we apply all-layers — see notes)
+#   - Parallel Residuals from layer 7+ (PARALLEL_RESIDUAL_START=7, 4 of 11 layers)
 #   - QK-Gain 5.25
 #   - Legal Score-First TTT (TTT_ENABLED=1, TTT_LR=0.005, TTT_EPOCHS=3)
 #   - EMA_DECAY=0.9965, WARMDOWN_FRAC=0.72, ENABLE_LOOPING_AT=0.35
 #   - MUON_WD=0.095, MATRIX_LR=0.022
-#   Our deltas on top:
-#   - NUM_LAYERS=6 + MLP_MULT=2 (CHAMP_D validated, val_bpb 1.39943 on 3090)
-#   - MATRIX_BITS=8 (our int8 quant breakthrough — eliminates the int6 quant gap)
-#   - USE_PARALLEL_MUON=1 (our batched Newton-Schulz speedup)
+#   Our deltas on top (where we bet on winning):
+#   - MATRIX_BITS=8 (int8 weights vs PR #1493's int6 — saves ~0.011 BPB on quant gap)
+#   - USE_PARALLEL_MUON=1 (batched Newton-Schulz speedup)
+#   - USE_CMP_QUANT_VALUE_DEDUP=1 (NIGHT_MODE L10 alphabet-snap compression to fit 16 MB at int8)
+#   - USE_GATED_ATTENTION=1 + USE_NORMUON=1 + USE_NORM_PCT_DROPOUT=1 (NIGHT_MODE wins)
 #   - max-autotune-no-cudagraphs compile mode + cudnn.benchmark
-#   - n-gram bias stack (NIGHT_MODE wins) — NOTE: may be Track-B-illegal, verify before submit
+#   - n-gram bias stack DISABLED (Issue #1017 Condition 2 grey area, user policy: no illegal)
 #   - 600s training cap, full 16 MB artifact target
 #
 # Usage on a fresh pod:
@@ -52,7 +54,7 @@ NUM_SEEDS=${#SEED_ARRAY[@]}
 
 # === Records folder staging ===
 DATE_STR=$(date -u +%Y-%m-%d)
-CONFIG_TAG="SP8192_NL6_MLP2_int8_NgramBias_PR_LegalTTT"
+CONFIG_TAG="SP8192_NL11_MLP4_int8_ParMuon_PR7_LegalTTT"
 RECORD_NAME="${DATE_STR}_${CONFIG_TAG}"
 RECORD_DIR="records/track_10min_16mb/${RECORD_NAME}"
 mkdir -p "$RECORD_DIR"
@@ -61,17 +63,24 @@ echo "============================================================"
 echo "[dry_run] SUBMISSION RUN starting at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "============================================================"
 echo "  Seeds: ${SEEDS} (${NUM_SEEDS} run$([ $NUM_SEEDS -gt 1 ] && echo s || echo ''))"
-echo "  Stack: PR #1493 leaderboard #1 (1.0810) + our int8 quant + parallel muon"
-echo "         + NUM_LAYERS=6 compute-efficient + n-gram bias + max-autotune"
+echo "  Stack: PR #1493 architecture (NL11/MLP4) + our int8 quant + parallel muon"
+echo "         + parallel residuals L7+ + alphabet-snap compress + max-autotune"
 echo "  Records folder: $RECORD_DIR"
 echo "============================================================"
 
 # === Submission-grade config (shared across all seed runs) ===
 export MAX_WALLCLOCK_SECONDS=600
 
-# Model architecture — CHAMP_D validated config (val_bpb 1.39943 on 3090, 600s)
-export NUM_LAYERS=6                         # CHAMP_D validated
-export MLP_MULT=2
+# Model architecture — Option C: PR #1493 architecture (11L+4x MLP) + our int8
+# This is the bigger-model bet. Reasoning: on 8xH100 SXM, model capacity is the
+# binding constraint (not training compute), so smaller models like CHAMP_D's
+# 6L+2x can't reach the leaderboard's 1.07-1.10 cluster. PR #1493 proves that
+# 11L+4x at int6 hits 1.0810. Our edge: switch to int8 to save 0.012 BPB on the
+# quant gap. CHAMP_D validated int8 on the smaller model (gap 0.001 vs 3+ BPB
+# for int6). This config is UNTESTED for us at the bigger size — CHAMP_E was
+# killed mid-run before we could measure 11L+int8.
+export NUM_LAYERS=11                        # match PR #1493
+export MLP_MULT=4                           # match PR #1493
 
 # PR #1493 (leaderboard #1, val_bpb 1.0810) architecture techniques (verified
 # from gh pr view 1493 + train_seed314.log Hyperparameters dump)
@@ -80,10 +89,10 @@ export LOOP_START=3
 export LOOP_END=5
 export ENABLE_LOOPING_AT=0.35               # PR #1493 (we default to 0.5)
 export QK_GAIN_INIT=5.25                    # PR #1493
-export USE_PARALLEL_RESIDUALS=1             # MORE aggressive than PR #1493 (they use L7+ on 11L = 36% deepest;
-                                            # our binary flag with NUM_LAYERS=6 = 100% parallel. Bet: 6L
-                                            # has less to lose from missing serial composition than 11L,
-                                            # and we want speed for more steps on 1xH100 PCIe.)
+export PARALLEL_RESIDUAL_START=7            # PR #1493: parallel residuals from layer 7+ (4 of 11 layers).
+                                            # Implemented via per-block flag (train.py Block.__init__),
+                                            # respects PR #1493's "deep half parallel" principle.
+export USE_PARALLEL_RESIDUALS=0             # use PARALLEL_RESIDUAL_START=7 instead (per-block, not all-layers)
 export EMA_DECAY=0.9965                     # PR #1493 (we default to 0.997)
 export WARMDOWN_FRAC=0.72                   # PR #1493 (we default to 0.667)
 export MUON_WD=0.095                        # PR #1493 (we default to 0.085)
@@ -95,8 +104,13 @@ export TORCH_COMPILE_MODE=max-autotune-no-cudagraphs
 export USE_CUDNN_BENCHMARK=1
 
 # Our discovered quant fix (int8 instead of int6 — preserves converged quality)
-export MATRIX_BITS=8
-export USE_CMP_QUANT_VALUE_DEDUP=0          # disable alphabet snap (less compression but cleaner quant)
+# CMP_QUANT_VALUE_DEDUP RE-ENABLED: NIGHT_MODE n=2 confirmed L10 world-novel,
+# alphabet-snap compression that trades minor quality for ~10-15% smaller artifact.
+# Needed to fit 11L+4x int8 (~36 MB raw) under the 16 MB cap. Was disabled in
+# the 6L+2x CHAMP_D run because we had artifact headroom. Now reinstated.
+export MATRIX_BITS=8                        # int8 weight quant (CHAMP_D validated, gap 0.001 BPB on 6L+2x)
+export USE_CMP_QUANT_VALUE_DEDUP=1          # alphabet snap for compression — NIGHT_MODE L10 win, restored
+export CMP_QUANT_DEDUP_STEP=2               # standard step
 
 # TTT — legal score-first only (matches PR #1493 exactly)
 # PR #1493 PR description: "no pre-quant TTT, no ETLB, no n-gram cache, no SLOT — fully compliant"
