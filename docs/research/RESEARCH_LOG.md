@@ -2551,3 +2551,30 @@ Both probe-informed from STACK_UTILISATION_RESULTS.md:
 Covered L02 + L06 grid cells that were empty before. Both status=draft awaiting prior-art audit (next Loop A fire per decision tree).
 Total IDEAs: 15.
 
+
+## 2026-04-16T17:08Z — Loop B fire 2: BLOCKED on pod disk config — needs user input
+
+### State
+- H100 pod `0ccqoqso62sxlx` is IDLE (GPU 0%, no train processes)
+- `submission/get_data.sh` crashed at step 4 disk headroom check: `/workspace` only had 14 GB free after docs_selected.jsonl (48 GB) downloaded to /root/paramgolf_bigdata/. Need 30 GB for SP8192 shards. Pod was launched with `--containerDiskSize 60 --volumeSize 0` — correct config per submission/README is 100 GB container + 50 GB volume.
+- Cleaned up: removed the 48 GB JSONL (60 GB now free again).
+- Tried `cached_challenge_fineweb.py --variant sp8192`: FAILS because `fineweb10B_sp8192` is NOT in the pre-tokenized manifest — only sp1024 is.
+
+### Options (user decision needed)
+1. **Destroy pod + recreate with 100 GB container disk + 50 GB volume** — correct config, 5 min bootstrap, pod ID changes (must update POD_HOSTS.env + kill-switch cron prompt).
+2. **Fall back to sp1024** — works immediately, but breaks val_bpb reproducibility vs our 1.082 sp8192 baseline.
+3. **Patch submission/get_data.sh to tokenize fewer shards** (~40 instead of 80, fits in 60 GB with JSONL present). Partial training corpus.
+
+### What's still running
+- H100 pod alive but idle ($2.99/hr burning)
+- Loop A (research, 13 min): continues writing IDEA docs independently
+- Loop B (experiments, 7 min): will log "blocked on data, no action" each fire until user resolves
+- Kill-switch at 08:55 AEST will still fire on the current pod ID
+
+### Not done this fire
+- No destructive actions taken (pod not destroyed, no code changes committed, no partial tokenize triggered)
+- EXP-001 remains status=pending, blocked_on=pod-disk-config
+
+### Recommended path
+Option 1 (recreate pod with correct disk config) is the canonical fix per submission/README.md. Cost is one-time 5 min bootstrap + 3-5 min data fetch. All 15 IDEAs can then run cleanly through the rest of the session.
+
