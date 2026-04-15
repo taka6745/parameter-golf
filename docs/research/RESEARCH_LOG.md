@@ -2672,3 +2672,12 @@ All 17 IDEAs now approved or in-experiment. Full queue ready when pod unblocks. 
 
 0/0%/0.
 
+
+## 2026-04-16T18:58Z — Loop A fire 8: wrote IDEA-018 (CMA-ES rare-token param fine-tuning, L04 WN)
+
+Covers empty L04 grid cell (optimizer novelty). Probe-informed: uses P7's per-bucket rare-token loss data as the target. Two-phase: (A) gradient-attribution to pick the ~1000-2000 params most correlated with rare-token loss, then (B) CMA-ES over that subset while rest frozen. Expected [-0.015, -0.005]. Cost 4h.
+
+Strong stacking with IDEA-015 (rare-token active sampling) and IDEA-009 (multiplicative n-gram tilt on rare tokens) — three-way attack on the P7-identified loss bottleneck.
+
+Total IDEAs: 18. Status=draft; next Loop A fire should audit.
+
