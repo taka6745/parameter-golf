@@ -2716,3 +2716,12 @@ All 18 IDEAs now approved or in-experiment. Queue fully ready when pod unblocks.
 
 0/0%/0.
 
+
+## 2026-04-16T19:44Z — Loop A fire 11: wrote IDEA-019 (CTW standalone predictor, L09 WN)
+
+Covers empty L09-specific cell (IDEA-012 was cross-layer). Decomposes moonshot into simplest form: LM + CTW + scalar-alpha hedge, nothing else. Expected [-0.030, -0.008]. Cost 4h.
+
+Decouples risk from IDEA-012: if CTW works standalone, IDEA-012 gets a validated component. If CTW fails, IDEA-012's range narrows. Good independent test.
+
+Total IDEAs: 19. Status=draft, audit next fire.
+
