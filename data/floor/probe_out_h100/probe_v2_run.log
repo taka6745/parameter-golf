@@ -1,0 +1,47 @@
+=== probe_stack_v2: loading final_model_seed42.int6.ptz (16,051,299 bytes) ===
+  decompressed with brotli+unshuffle
+  GPTQ format: 207 weight entries, 140 meta entries
+
+=== P1: parameter census ===
+  tok_emb.weight                                               (8192, 512)       4,210,688  25.10%
+  blocks.0.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+  blocks.1.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+  blocks.2.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+  blocks.3.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+  blocks.4.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+  blocks.5.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+  blocks.6.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+  blocks.7.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+  blocks.8.mlp.fc.weight                                       (2048, 512)       1,052,672   6.27%
+
+=== P2: weight-bit entropy (on quantized ints) ===
+  top-5 wasted:
+    tok_emb.weight                                          alloc=8  H=4.72  wasted=1.72 MB
+    blocks.10.mlp.proj.weight                               alloc=8  H=3.33  wasted=0.61 MB
+    blocks.5.mlp.proj.weight                                alloc=8  H=3.33  wasted=0.61 MB
+    blocks.7.mlp.proj.weight                                alloc=8  H=3.33  wasted=0.61 MB
+    blocks.8.mlp.proj.weight                                alloc=8  H=3.33  wasted=0.61 MB
+
+=== P3: attention head weight norms (dead-head proxy) ===
+  heads with <50% of expected norm share: 0 / 88
+
+=== P4: MLP per-neuron weight norms (dead-neuron proxy) ===
+  total dead neurons across all layers: 0/22528 (0.0%)
+
+=== P5: embedding row usage from val ===
+  unseen: 138/8192  rare: 9.8%  H=10.408  unused-embed-norm-mean: 1.875 (vs overall 5.091)
+
+=== P6: low-rank analysis (dequantized) ===
+  tok_emb.weight                                          (8192, 512)    k95= 439/512  save=  8.9%
+  blocks.0.mlp.fc.weight                                  (2048, 512)    k95= 438/512  save=  0.0%
+  blocks.0.mlp.proj.weight                                (512, 2048)    k95= 438/512  save=  0.0%
+  blocks.1.mlp.fc.weight                                  (2048, 512)    k95= 439/512  save=  0.0%
+  blocks.1.mlp.proj.weight                                (512, 2048)    k95= 431/512  save=  0.0%
+  blocks.2.mlp.fc.weight                                  (2048, 512)    k95= 439/512  save=  0.0%
+  blocks.2.mlp.proj.weight                                (512, 2048)    k95= 435/512  save=  0.0%
+  blocks.3.mlp.fc.weight                                  (2048, 512)    k95= 436/512  save=  0.0%
+  blocks.3.mlp.proj.weight                                (512, 2048)    k95= 438/512  save=  0.0%
+  blocks.4.mlp.fc.weight                                  (2048, 512)    k95= 437/512  save=  0.0%
+
+=== probe_stack_v2 DONE ===
+artifacts in probe_out/

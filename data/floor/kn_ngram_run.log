@@ -1,0 +1,24 @@
+loading data/floor/val_sp1024.txt
+  total 151.1 MB
+  train slice: 83.9 MB | val slice: 10.5 MB
+  n=1: BPB=4.6180  (1.9s, 83,886,080 train grams, 10,485,760 val grams)
+  n=2: BPB=3.6745  (6.6s, 83,886,079 train grams, 10,485,759 val grams)
+  n=3: BPB=3.0704  (12.0s, 83,886,078 train grams, 10,485,758 val grams)
+  n=4: BPB=2.5916  (16.6s, 83,886,077 train grams, 10,485,757 val grams)
+  n=5: BPB=2.4549  (27.5s, 83,886,076 train grams, 10,485,756 val grams)
+  n=6: BPB=2.6836  (41.6s, 83,886,075 train grams, 10,485,755 val grams)
+
+=== Add-k (k=1) smoothed n-gram BPB on FineWeb val ===
+  n=1  BPB=4.6180
+  n=2  BPB=3.6745
+  n=3  BPB=3.0704
+  n=4  BPB=2.5916
+  n=5  BPB=2.4549
+  n=6  BPB=2.6836
+
+=== Marginal value of each extra n-gram order ===
+  n=2 vs n=1: ΔBPB = +0.9435
+  n=3 vs n=2: ΔBPB = +0.6041
+  n=4 vs n=3: ΔBPB = +0.4788
+  n=5 vs n=4: ΔBPB = +0.1367
+  n=6 vs n=5: ΔBPB = -0.2287

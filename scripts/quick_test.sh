@@ -2,7 +2,7 @@
 # Quick A/B test: runs a script for N steps and reports train_loss at each step
 # Usage: ./quick_test.sh <script.py> <run_id> [steps=50]
 set -e
-SCRIPT="${1:-train_gpt_mlx_v2.py}"
+SCRIPT="${1:-archive/train_gpt_mlx_v2.py}"
 RID="${2:-quick_test}"
 STEPS="${3:-50}"
 

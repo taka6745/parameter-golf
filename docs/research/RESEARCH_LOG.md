@@ -2488,3 +2488,35 @@ C90 fired at 1133Z (RIEMANNIAN ship → just demoted). C30 fired at 1127Z (L03+L
 - Consider SP8192 deployment if pod cycles
 - No new world-novel build fires (backlog saturated 176+ candidates, bottleneck is testing)
 
+
+---
+
+## 2026-04-16 16:30Z — Autonomous research session begins (7h until 9am AEST kill-switch)
+
+**Mode**: dual-loop autonomous research on H100 pod `0ccqoqso62sxlx` (paramgolf-h100, $2.99/hr, still alive from last session).
+
+**Doc system**: fully live — `docs/ideas/`, `docs/experiments/`, `docs/findings/` with templates + index rebuilder. 13 starter IDEA docs seeded (IDEA-001 through IDEA-013).
+
+**Loops**:
+- Loop A (research, 12-min cadence): runs `docs/research/RESEARCH_PROTOCOL.md` on `STACK_NOVELTY_TRACKER_v2` to generate new IDEA candidates + prior-art audit top 5 each fire
+- Loop B (experiments, 8-min cadence): polls H100 pod → dispatch next approved IDEA if idle → update EXP doc → promote to FINDING if warranted
+
+**Budget**:
+- 7h × $2.99/hr ≈ $21 H100
+- Prior session cost: ~$4
+- Total projected: ~$25 of $1000 OpenAI credits (2.5%)
+
+**Kill-switch**: one-shot cron at 22:55Z (08:55 AEST) will:
+1. Cancel Loop A + Loop B
+2. Let any in-flight training finish (up to +15 min slippage)
+3. rsync pod → homelab
+4. `runpodctl remove pod 0ccqoqso62sxlx`
+5. git commit + push all docs
+6. Final session summary appended here
+
+**Starting state**:
+- Our best: val_bpb = 1.082 (seed 42, 2026-04-10 record)
+- SOTA: 1.07 (Ciprian-Florin Ifrim ternary, comp leaderboard)
+- Moonshot target: <1.0 BPB
+- Gap to SOTA: 0.012 BPB | Gap to <1.0: 0.082 BPB
+

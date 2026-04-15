@@ -30,3 +30,9 @@ data/*.pt
 data/*.pth
 # Operational lockfiles + ephemeral state — never commit
 .claude/scheduled_tasks.lock
+node_modules/
+
+# Floor/probe artifacts — too big for git, stored on homelab
+data/floor/
+data/experiment_logs/
+records/**/*.int6.ptz

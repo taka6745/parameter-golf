@@ -1,0 +1,79 @@
+=== probe_stack_v3 ===
+  main ckpt: final_model_seed42.int6.ptz  (16,051,299 bytes)
+  val bin: val_sp8192.bin (found)
+  additional seeds for P11: ['final_model_seed314.int6.ptz', 'final_model_seed999.int6.ptz']
+
+=== P10: BSHF stride sweep ===
+  stride=1  compressed=16,058,493 bytes  63.1s
+  stride=2  compressed=16,051,299 bytes  67.9s
+  stride=3  compressed=16,077,476 bytes  74.2s
+  stride=4  compressed=16,060,143 bytes  70.3s
+  stride=5  compressed=16,086,273 bytes  78.1s
+  stride=8  compressed=16,070,740 bytes  77.1s
+
+=== P11: cross-seed stability (3 seeds) ===
+  most-noisy top-3: [('blocks.9.attn.gate_proj.weight', 1.249), ('blocks.8.attn.gate_proj.weight', 1.237), ('blocks.8.attn.c_k.weight', 1.199)]
+  most-stable bot-3: [('_nlfi_bigram_mult', 0.0), ('_nlfi_fourgram_mult', 0.0), ('_nlfi_trigram_mult', 0.0)]
+
+=== P12: embedding cosine clusters ===
+  cos-sim >= 0.95: 8192 clusters (max size 1, mean 1.0)
+  cos-sim >= 0.9: 8134 clusters (max size 11, mean 1.0)
+  cos-sim >= 0.8: 8051 clusters (max size 42, mean 1.0)
+
+=== model-based probes (P7/P8/P9/P13) ===
+
+=== building GPT model from records_train_gpt.py ===
+  hparams: vocab=8192 layers=11 dim=512 heads=8/4 mlp×4.0 PR=7
+  state_dict: loaded 140 keys, 0 missing ([]), 0 extra ([])
+Traceback (most recent call last):
+  File "/workspace/paramgolf/probe_stack_v3.py", line 452, in <module>
+    main()
+  File "/workspace/paramgolf/probe_stack_v3.py", line 443, in main
+    probe_model(ckpt42, val_bin)
+  File "/workspace/paramgolf/probe_stack_v3.py", line 260, in probe_model
+    load_into_model(model, rgm, ckpt_path)
+  File "/workspace/paramgolf/probe_stack_v3.py", line 249, in load_into_model
+    model.load_state_dict(deq, strict=False)
+  File "/usr/local/lib/python3.11/dist-packages/torch/nn/modules/module.py", line 2215, in load_state_dict
+    raise RuntimeError('Error(s) in loading state_dict for {}:\n\t{}'.format(
+RuntimeError: Error(s) in loading state_dict for GPT:
+	size mismatch for skip_weights: copying a param with shape torch.Size([8, 512]) from checkpoint, the shape in current model is torch.Size([7, 512]).
+	size mismatch for skip_gates: copying a param with shape torch.Size([8, 512]) from checkpoint, the shape in current model is torch.Size([7, 512]).
+
+=== model-based probes (P7/P8/P9/P13) ===
+
+=== building GPT model from records_train_gpt.py ===
+  hparams: vocab=8192 layers=11 dim=512 heads=8/4 mlp×4.0 PR=7
+  state_dict: loaded 138  mismatched 2 (e.g. [('skip_weights', torch.Size([8, 512]), torch.Size([7, 512])), ('skip_gates', torch.Size([8, 512]), torch.Size([7, 512]))])  missing 0  extras 0
+  val tokens: 40,542,913
+  running forward pass for per-token loss...
+  model forward failed on seq 0: TypeError: GPT.forward() missing 1 required positional argument: 'target_ids'
+  no token losses collected (model forward broke); skipping P7/P8/P9
+
+=== model-based probes (P7/P8/P9/P13) ===
+
+=== building GPT model from records_train_gpt.py ===
+  hparams: vocab=8192 layers=11 dim=512 heads=8/4 mlp×4.0 PR=7
+  state_dict: loaded 138  mismatched 2 (e.g. [('skip_weights', torch.Size([8, 512]), torch.Size([7, 512])), ('skip_gates', torch.Size([8, 512]), torch.Size([7, 512]))])  missing 0  extras 0
+  val tokens: 40,542,913
+  running forward pass for per-token loss...
+    10/100 sequences done
+    20/100 sequences done
+    30/100 sequences done
+    40/100 sequences done
+    50/100 sequences done
+    60/100 sequences done
+    70/100 sequences done
+    80/100 sequences done
+    90/100 sequences done
+    100/100 sequences done
+  collected 204,800 per-token losses
+  per-token loss artifact written, overall mean loss = 9.4120
+  per-layer block contribution:
+    L 0: in=22.63 out=108.45 ratio=4.793
+    L 1: in=108.45 out=111.56 ratio=1.029
+    L 2: in=111.56 out=99.26 ratio=0.890
+    L 3: in=99.26 out=100.52 ratio=1.013
+    L 4: in=100.52 out=94.36 ratio=0.939
+    L 5: in=94.36 out=89.95 ratio=0.953
+    L 6: in=88.84 out=77.94 ratio=0.877

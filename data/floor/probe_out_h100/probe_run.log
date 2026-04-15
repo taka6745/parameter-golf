@@ -1,0 +1,50 @@
+=== probe_stack: loading final_model_seed42.int6.ptz (16,051,299 bytes) ===
+  decompressed with brotli+unshuffle, raw size 36,337,057 bytes
+  top-level type: dict
+  top-level keys: ['w', 'm']
+  found 207 tensors in the checkpoint
+
+=== P1: parameter census ===
+  w.tok_emb.weight.q                                           (8192, 512)               int8            4,194,304  25.00%
+  w.blocks.0.mlp.fc.weight.q                                   (2048, 512)               int8            1,048,576  6.25%
+  w.blocks.0.mlp.proj.weight.q                                 (512, 2048)               int8            1,048,576  6.25%
+  w.blocks.1.mlp.fc.weight.q                                   (2048, 512)               int8            1,048,576  6.25%
+  w.blocks.1.mlp.proj.weight.q                                 (512, 2048)               int8            1,048,576  6.25%
+  w.blocks.2.mlp.fc.weight.q                                   (2048, 512)               int8            1,048,576  6.25%
+  w.blocks.2.mlp.proj.weight.q                                 (512, 2048)               int8            1,048,576  6.25%
+  w.blocks.3.mlp.fc.weight.q                                   (2048, 512)               int8            1,048,576  6.25%
+  w.blocks.3.mlp.proj.weight.q                                 (512, 2048)               int8            1,048,576  6.25%
+  w.blocks.4.mlp.fc.weight.q                                   (2048, 512)               int8            1,048,576  6.25%
+  w.blocks.4.mlp.proj.weight.q                                 (512, 2048)               int8            1,048,576  6.25%
+  w.blocks.5.mlp.fc.weight.q                                   (2048, 512)               int8            1,048,576  6.25%
+  w.blocks.5.mlp.proj.weight.q                                 (512, 2048)               int8            1,048,576  6.25%
+  w.blocks.6.mlp.fc.weight.q                                   (2048, 512)               int8            1,048,576  6.25%
+  w.blocks.6.mlp.proj.weight.q                                 (512, 2048)               int8            1,048,576  6.25%
+  TOTAL: 36,270,442 bytes (216.2% of 16MB cap)
+
+=== P2: weight-bit entropy ===
+  w.tok_emb.weight.q                                 alloc= 8  H=4.72  wasted=  1681.7 KB
+  w.blocks.10.mlp.proj.weight.q                      alloc= 8  H=3.33  wasted=   598.0 KB
+  w.blocks.5.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   598.0 KB
+  w.blocks.7.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.9 KB
+  w.blocks.8.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.9 KB
+  w.blocks.1.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.9 KB
+  w.blocks.9.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.9 KB
+  w.blocks.4.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.9 KB
+  w.blocks.3.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.9 KB
+  w.blocks.6.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.9 KB
+  w.blocks.2.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.9 KB
+  w.blocks.3.mlp.fc.weight.q                         alloc= 8  H=3.33  wasted=   597.8 KB
+  w.blocks.10.mlp.fc.weight.q                        alloc= 8  H=3.33  wasted=   597.8 KB
+  w.blocks.4.mlp.fc.weight.q                         alloc= 8  H=3.33  wasted=   597.8 KB
+  w.blocks.0.mlp.proj.weight.q                       alloc= 8  H=3.33  wasted=   597.8 KB
+
+=== P5: SKIPPED (no val bin provided) ===
+
+=== P6: unembed low-rank ===
+  w.skip_weights  torch.Size([8, 512])  rank@95% = 2 / 8  savings@95% = 74.6%
+  w.skip_gates  torch.Size([8, 512])  rank@95% = 2 / 8  savings@95% = 74.6%
+  w.blocks.0.attn.gate_proj.weight  torch.Size([8, 512])  rank@95% = 7 / 8  savings@95% = 11.1%
+
+=== probe_stack DONE ===
+Artifacts in probe_out/
