@@ -3,7 +3,7 @@ id: IDEA-018
 slug: cma-es-rare-token-params
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L04
 novelty_class: WN
 expected_bpb: [-0.015, -0.005]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l04-cma-es-for-rare-token-param-subset
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype
 ---
 
@@ -94,12 +94,16 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 9 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "CMA-ES language model fine-tuning", "evolutionary optimization transformer parameters", "rare token optimization LLM"
-- **Comp PRs**: grep for `cma`, `evolutionary`, `rare-token-optim` in comp PR titles
-- **Verdict**: TBD; CMA-ES on neural nets is known (ES / NE community) but the rare-token-correlated subset selection is novel
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - "Evolution Strategies at Scale: LLM Fine-Tuning Beyond Reinforcement Learning" (2024, arxiv 2509.24372) — full-parameter ES on billion-scale LLMs. Differs: tunes ALL params, no rare-token-correlated subset.
+  - "Utilizing Evolution Strategies to Train Transformers in Reinforcement Learning" (2025, arxiv 2501.13883) — ES for transformer RL; different setting.
+  - T-REG / TOKENTUNE (token-level weighting) — address rare tokens via weighting during SGD, not evolutionary subset search.
+  - LLaMA-ES (2024) — optimizes CMA-ES hyperparameters about LLMs, not model params.
+- **Comp PRs** (openai/parameter-golf): none found for CMA-ES or evolutionary subset fine-tuning.
+- **Verdict**: **world-novel**. The specific combination — CMA-ES fine-tuning of a gradient-attribution-selected rare-token-correlated parameter subset, using P7-style probe data as the target — is unreported in literature and not shipped in any comp PR.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 

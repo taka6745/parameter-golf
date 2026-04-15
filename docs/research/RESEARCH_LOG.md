@@ -2686,3 +2686,8 @@ Total IDEAs: 18. Status=draft; next Loop A fire should audit.
 
 0/0%/0.
 
+
+## 2026-04-16T19:08Z — Loop A fire 9: IDEA-018 prior-art audited → world-novel
+
+Explore subagent confirmed IDEA-018 (CMA-ES × rare-token param subset) is world-novel. Nearest prior art: "Evolution Strategies at Scale" (full-parameter ES, not subset) and T-REG/TOKENTUNE (SGD weighting, not evolutionary). No comp PR ships CMA-ES fine-tuning. Promoted draft → audited. 18 IDEAs total.
+
