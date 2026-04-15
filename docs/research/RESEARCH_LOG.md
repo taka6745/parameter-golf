@@ -2799,3 +2799,8 @@ Explore subagent: Infini-gram (COLM 2024) uses suffix arrays for longest-match w
 
 20 IDEAs total, all approved or in-experiment. Queue complete. Coverage: L01 (2), L02 (1), L03 (4), L04 (1), L05 (2), L06 (1), L07 (2), L08 (1), L09 (3 cache variants + moonshot cross-layer), L10 (1 MAML), L11 (1 megakernel), cross-layer (1 moonshot). All layers covered.
 
+
+## 2026-04-16T21:00Z — Loop B fire 27: still blocked
+
+0/0%/0.
+
