@@ -2597,3 +2597,10 @@ Pod: IDLE (GPU 0%). Disk: 60 GB free (JSONL cleanup held). Shards: 0. No user re
 
 Pod IDLE; 0 shards; no new logs since 17:01Z fetch_sp8192 error. Burning ~$0.70 idle so far (3 fires × ~12 min × $2.99/hr). No user response yet. No action.
 
+
+## 2026-04-16T17:42Z — Loop A fire 4: promoted IDEA-014 + IDEA-015 audited → approved
+
+Both had completed prior-art audits in fire 3 and carried full falsifiability sections. Promotion means they're now queue-ready for Loop B to run as soon as the disk blocker clears.
+
+All 15 IDEAs are now in `approved` or `in-experiment` states. Decision-tree state: nothing in `draft` or `audited` needing action. Next Loop A fires should either write new IDEAs for uncovered grid cells (L04 optimizer, L10 TTT, L11 custom kernels) or do additional prior-art re-verification on approved IDEAs as comp PRs may have landed since last check.
+
