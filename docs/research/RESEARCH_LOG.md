@@ -2921,3 +2921,8 @@ Total IDEAs: 23. Status=draft; audit next fire.
 
 **SDQ-LLM (arxiv 2510.03275, Sep 2025) is direct prior art.** Exact concept: sigma-delta quantization for transformer weights with error-feedback, ~1.58-bit effective precision. Github implementation exists. Novelty reclassified WN → **CP (comp-port)**. Still worth running as a port (no comp PR ships it), but can't claim world-novel. First reclassification this session — reminder that subagent audits matter. Promoted draft → audited.
 
+
+## 2026-04-16T22:52Z — Loop B fire 41: still blocked
+
+0/0%/0.
+
