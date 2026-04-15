@@ -2530,3 +2530,14 @@ C90 fired at 1133Z (RIEMANNIAN ship → just demoted). C30 fired at 1127Z (L03+L
 - Projected wallclock: ~15 min (10 train + 5 eval/quant)
 - First experiment of the autonomous session.
 
+
+## 2026-04-16 02:57 AEST (16:57Z) — Loop B fire 0 correction: data download required
+
+Pod's `/workspace/paramgolf/data/datasets/datasets/fineweb10B_sp8192/` is missing the training shards (pod was fresh, we only pulled final_model_seed42.int6.ptz earlier for probes).
+
+`submission/run.sh` aborts early with `[run] ERROR: missing shards. Run get_data.sh first.` Data download takes 30-60 min (docs_selected.jsonl from HF + tokenize into sp8192 shards).
+
+**Action**: kicked off `submission/get_data.sh` on the pod in background. Loop B fires every 7 min and will detect data-ready (ls shard count) before it attempts to relaunch EXP-001. Until then, Loop B fires will just monitor the download and log progress. Loop A can continue research work in parallel.
+
+EXP-001 status: `pending` blocked_on=data-download-get_data.sh until shards present.
+

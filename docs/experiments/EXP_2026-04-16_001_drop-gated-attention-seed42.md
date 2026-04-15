@@ -12,10 +12,11 @@ config:
   MAX_WALLCLOCK_SECONDS: 600
 started: 2026-04-16T16:55Z
 finished: null
-status: running
+status: pending
 cost_usd: null
 val_bpb: null
 outcome: pending
+blocked_on: data-download-get_data.sh
 ---
 
 # EXP-2026-04-16-001: IDEA-001 drop gated attention — seed 42
@@ -85,3 +86,5 @@ _pending — determined by result_
 ## Notes
 
 First autonomous-loop experiment. Validates Loop B's ability to dispatch on idle pod, write an EXP doc, launch training, and (in a later fire) pull results.
+
+**2026-04-16 02:57 AEST**: Training launch attempted but `submission/run.sh` aborted — data shards not downloaded on pod yet (pod is fresh, missing `data/datasets/datasets/fineweb10B_sp8192/`). Kicked off `submission/get_data.sh` in background (PID 29285). Projected completion: 30-60 min. Loop B should detect data-ready state and relaunch this experiment. Status set to `pending blocked_on=data-download` until then.
