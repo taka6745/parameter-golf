@@ -2843,3 +2843,8 @@ TensorGPT (TT on embeddings, uniform quant) + Tender (TT co-design, activation f
 
 21 IDEAs total, all approved or in-experiment. L07 now has 3 ideas (005 port, 011 embed shrink, 021 tensor-train). Queue deep; waiting on pod unblock to actually run anything.
 
+
+## 2026-04-16T21:45Z — Loop B fire 32: still blocked
+
+0/0%/0.
+
