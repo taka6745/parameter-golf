@@ -2634,3 +2634,8 @@ Both status=draft. Next Loop A fires: prior-art audit (decision tree case 2 now 
 
 0/0%/0. No change. Recovery script ready at `scripts/recreate_h100_100gb.sh`.
 
+
+## 2026-04-16T18:17Z — Loop B fire 8: still blocked (8th consecutive)
+
+0/0%/0. Unchanged. ~$1.20 pod idle burn so far.
+
