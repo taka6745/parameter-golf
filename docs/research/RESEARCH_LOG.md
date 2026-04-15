@@ -2681,3 +2681,8 @@ Strong stacking with IDEA-015 (rare-token active sampling) and IDEA-009 (multipl
 
 Total IDEAs: 18. Status=draft; next Loop A fire should audit.
 
+
+## 2026-04-16T19:00Z — Loop B fire 13: still blocked
+
+0/0%/0.
+
