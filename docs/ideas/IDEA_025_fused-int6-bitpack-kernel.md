@@ -3,7 +3,7 @@ id: IDEA-025
 slug: fused-int6-bitpack-kernel
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L11
 novelty_class: WN
 expected_bpb: [-0.005, -0.001]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l11-fused-bit-pack-kernels-int6-packunpack
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype
 ---
 
@@ -71,12 +71,14 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 30 (Explore subagent).
 
-- **Arxiv (2023-2026)**: "fused int4 matmul Hopper", "wgmma int6 bit-pack", "Marlin int4 kernel", "bit-packed matmul CUDA"
-- **Comp PRs**: grep for `fused_int6`, `bit_pack`, `wgmma_int` in comp PR titles
-- **Verdict**: TBD; Marlin (int4) and BitBLAS exist for int-matmul kernels, but int6-specific Hopper wgmma fusion is likely novel
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - **FlexQ** (Aug 2025, arxiv 2508.04405) — post-training INT6 quantization + specialized kernel via Binary Tensor Core emulation. 1.39× speedup. **But: unpacks INT6 → FP8 BEFORE matmul** (pre-dequant), not in-matmul. Does NOT target wgmma/Hopper path.
+  - **FireQ** (May 2025, arxiv 2505.20839) — INT4+FP8 Hopper kernel with in-register INT4→FP8 unpack via LUT during matmul. Establishes register-level unpack feasibility. **But: INT4 only**, uses FP8 tensor cores not wgmma.
+- **Comp PRs** (openai/parameter-golf): none match `int6 unpack-in-matmul wgmma`. PR #1450 (Triton TMA MLP megakernel, shipped) and similar exist but no int6-specific wgmma fusion.
+- **Verdict**: **world-novel** with caveats. INT6-specific Hopper wgmma unpack-in-matmul (no intermediate tensor) isn't documented. FlexQ (int6 pre-dequant) and FireQ (int4 in-matmul) validate components; the full combination is novel.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 

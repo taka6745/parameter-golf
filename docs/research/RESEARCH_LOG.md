@@ -3007,3 +3007,8 @@ Total IDEAs: 25. Status=draft; audit next fire.
 
 0/0%/0.
 
+
+## 2026-04-17T00:22Z — Loop A fire 30: IDEA-025 audited → world-novel (with caveats)
+
+FlexQ (Aug 2025) does int6 pre-dequant. FireQ (May 2025) does int4 in-matmul. Our int6 in-matmul wgmma combination is not documented. Promoted draft → audited.
+
