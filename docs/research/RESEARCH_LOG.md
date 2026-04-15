@@ -2755,3 +2755,8 @@ Subagent: no arxiv / comp PR combines CTW with modern transformer LM. cmix prece
 
 19 IDEAs total, all approved or in-experiment. Full queue ready. Next fires: more IDEAs for uncovered cells OR re-audit of older approved IDEAs against latest comp PRs.
 
+
+## 2026-04-16T20:15Z — Loop B fire 22: still blocked
+
+0/0%/0.
+
