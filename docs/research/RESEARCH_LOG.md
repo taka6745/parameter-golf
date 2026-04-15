@@ -2818,3 +2818,8 @@ Companion to IDEA-005 (mixed int5/int6) but much more aggressive compression via
 
 Total IDEAs: 21. Status=draft; audit next fire.
 
+
+## 2026-04-16T21:15Z — Loop B fire 29: still blocked
+
+0/0%/0.
+
