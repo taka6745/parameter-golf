@@ -2740,3 +2740,8 @@ Total IDEAs: 19. Status=draft, audit next fire.
 
 Subagent: no arxiv / comp PR combines CTW with modern transformer LM. cmix precedent uses CTW on bytes but no neural mixture. Our LM+CTW scalar-hedge is novel. Promoted draft → audited.
 
+
+## 2026-04-16T20:00Z — Loop B fire 20: still blocked
+
+0/0%/0.
+
