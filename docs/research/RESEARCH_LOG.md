@@ -2760,3 +2760,12 @@ Subagent: no arxiv / comp PR combines CTW with modern transformer LM. cmix prece
 
 0/0%/0.
 
+
+## 2026-04-16T20:22Z — Loop A fire 14: wrote IDEA-020 (suffix-array online cache, L09 WN)
+
+Third cache variant (after IDEA-012 hash + IDEA-019 CTW tree). Uses online suffix array for variable-length longest-match lookups. Expected [-0.020, -0.005] via capturing long-repeat structure (URLs, code, boilerplate) that fixed-k hash misses. Cost 5h.
+
+Three-way cache bake-off is the valuable experiment design: best of {hash, CTW, SA} becomes the moonshot's cache layer.
+
+Total IDEAs: 20. Status=draft; audit next fire.
+
