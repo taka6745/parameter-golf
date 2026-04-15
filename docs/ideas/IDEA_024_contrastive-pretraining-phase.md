@@ -3,7 +3,7 @@ id: IDEA-024
 slug: contrastive-pretraining-phase
 created: 2026-04-16
 updated: 2026-04-16
-status: audited
+status: approved
 layer: L05
 novelty_class: WN
 expected_bpb: [-0.010, -0.003]
