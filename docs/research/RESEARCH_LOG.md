@@ -2892,3 +2892,8 @@ Snapshot Ensembles (Huang 2017) + BMA (Hoeting 1999) exist classically; recent T
 
 22 IDEAs total, all approved or in-experiment. L06 has 2 ideas. Queue deep.
 
+
+## 2026-04-16T22:30Z — Loop B fire 38: still blocked
+
+0/0%/0.
+
