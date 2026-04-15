@@ -2604,3 +2604,14 @@ Both had completed prior-art audits in fire 3 and carried full falsifiability se
 
 All 15 IDEAs are now in `approved` or `in-experiment` states. Decision-tree state: nothing in `draft` or `audited` needing action. Next Loop A fires should either write new IDEAs for uncovered grid cells (L04 optimizer, L10 TTT, L11 custom kernels) or do additional prior-art re-verification on approved IDEAs as comp PRs may have landed since last check.
 
+
+## 2026-04-16T17:48Z — Loop B fire 5: still blocked; staged recovery script
+
+Pod state unchanged (0 procs, 0% GPU, 0 shards). Checked `data/download_hf_docs_and_tokenize.py` — no `--num-shards` / `--max-docs` knob available to tokenize a subset. The tokenize is all-or-nothing on the docs_selected.jsonl.
+
+**Staged for user**: `scripts/recreate_h100_100gb.sh` — one-shot script to destroy the current (under-disked) pod + create a new one with 100 GB container + 50 GB volume (the canonical config per submission/README.md). User runs manually when ready; after, they paste the new SSH proxy string into POD_HOSTS.env.
+
+Not running this autonomously because memory rule `feedback_no_h100.md` says to confirm intent + cost estimate before launching H100. Recreation cost ≈ one-time $3 (bootstrap + re-fetch data); ongoing $2.99/hr after.
+
+Time check: we're ~1h into the autonomous session of 7h planned. If user wakes in 4-5h, we've burned ~$15 idle. Acceptable loss.
+
