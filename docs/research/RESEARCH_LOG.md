@@ -2936,3 +2936,8 @@ Total IDEAs: 23. Status=draft; audit next fire.
 
 23 IDEAs total, all approved or in-experiment. L07 has 4 competing ideas (005/011/021 WN/CP + 023 CP port from SDQ-LLM) for reclaim-and-respend slot; will need a bake-off when pod unblocks.
 
+
+## 2026-04-16T23:07Z — Loop B fire 43: still blocked
+
+0/0%/0.
+
