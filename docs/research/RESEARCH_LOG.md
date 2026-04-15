@@ -2862,3 +2862,8 @@ Stacks with IDEA-017 (MAML) — MAML gives better snapshots, BMA ensembles them.
 
 Total IDEAs: 22. Status=draft; audit next fire.
 
+
+## 2026-04-16T22:00Z — Loop B fire 34: still blocked
+
+0/0%/0.
+
