@@ -2997,3 +2997,8 @@ Smaller-scope than IDEA-016 megakernel; prerequisite-like for IDEA-012 moonshot 
 
 Total IDEAs: 25. Status=draft; audit next fire.
 
+
+## 2026-04-17T00:07Z — Loop B fire 50: still blocked
+
+0/0%/0. Session crossed midnight UTC.
+
