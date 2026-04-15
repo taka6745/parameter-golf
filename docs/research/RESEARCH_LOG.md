@@ -2629,3 +2629,8 @@ Both cover previously-empty grid cells in RESEARCH_PROTOCOL §1:
 
 Both status=draft. Next Loop A fires: prior-art audit (decision tree case 2 now applies again since we have 2 drafts). Total IDEAs: 17.
 
+
+## 2026-04-16T18:10Z — Loop B fire 7: still blocked (fire 7 of idle)
+
+0/0%/0. No change. Recovery script ready at `scripts/recreate_h100_100gb.sh`.
+
