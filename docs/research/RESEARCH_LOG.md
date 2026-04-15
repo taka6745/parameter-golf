@@ -2988,3 +2988,12 @@ Contrastive learning exists (SimCSE, CLAP, CPO, CPC) but no prior art uses a SHO
 
 0/0%/0.
 
+
+## 2026-04-17T00:07Z — Loop A fire 29: wrote IDEA-025 (fused int6 bit-pack kernel, L11 WN)
+
+Custom Hopper wgmma kernel that unpacks int6 weights in the A-register tile path, eliminating dequant pass. Target: 10-20% eval speedup → budget for more TTT epochs. Expected [-0.005, -0.001]. Cost 6h.
+
+Smaller-scope than IDEA-016 megakernel; prerequisite-like for IDEA-012 moonshot if eval wallclock is binding.
+
+Total IDEAs: 25. Status=draft; audit next fire.
+
