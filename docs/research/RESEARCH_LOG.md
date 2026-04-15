@@ -2520,3 +2520,13 @@ C90 fired at 1133Z (RIEMANNIAN ship → just demoted). C30 fired at 1127Z (L03+L
 - Moonshot target: <1.0 BPB
 - Gap to SOTA: 0.012 BPB | Gap to <1.0: 0.082 BPB
 
+
+## 2026-04-16 02:55 AEST (16:55Z) — Loop B fire 0 (manual): launched EXP-2026-04-16-001
+
+- IDEA-001 drop-gated-attention → EXP-2026-04-16-001 seed 42
+- Pod: paramgolf-h100 (H100 SXM)
+- Expected val_bpb: ≤ 1.074
+- Kill-if: ≥ 1.079 (less than 0.003 improvement)
+- Projected wallclock: ~15 min (10 train + 5 eval/quant)
+- First experiment of the autonomous session.
+

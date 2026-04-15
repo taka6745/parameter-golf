@@ -3,7 +3,7 @@ id: IDEA-001
 slug: drop-gated-attention
 created: 2026-04-16
 updated: 2026-04-16
-status: approved
+status: in-experiment
 layer: L03
 novelty_class: CN
 expected_bpb: [-0.012, -0.008]
