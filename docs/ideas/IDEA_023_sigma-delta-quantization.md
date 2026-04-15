@@ -3,16 +3,16 @@ id: IDEA-023
 slug: sigma-delta-quantization
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L07
-novelty_class: WN
+novelty_class: CP
 expected_bpb: [-0.012, -0.002]
 cost_hours: 4.0
 depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l07-sigma-delta-quantization-residual-feedback
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype
 ---
 
@@ -75,12 +75,21 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 24 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "sigma delta quantization neural network weight", "noise shaping neural compression", "residual feedback quantization transformer"
-- **Comp PRs**: grep for `sigma-delta`, `delta-sigma`, `noise-shape` in comp PR titles
-- **Verdict**: TBD; sigma-delta is classical audio DSP (Candy 1985), applying it to NN weight quantization is cross-domain, probably novel for byte-LM comp
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - **"SDQ-LLM: Sigma-Delta Quantization for 1-bit LLMs of any size"** (Sep 2025, arxiv 2510.03275) — **DIRECT prior art**. Implements exactly this concept: sigma-delta quantization for transformer weights with error-feedback propagation, per-layer OSR allocation, ~1.58-bit effective precision. Github: `Dreamlittlecat/LLM-Quant-Factory`.
+  - "Residual Quantization for Low Bit-Width Neural Networks" (IEEE 2021) — foundational residual-feedback approach.
+- **Comp PRs** (openai/parameter-golf): none ship sigma-delta. Only generic QAT/quantization PRs (#1595, #1562).
+- **Verdict**: **already-done-in-SDQ-LLM (arxiv 2510.03275)**. Novelty reclassification from WN → **CP (comp-port)** since no comp PR has shipped SDQ-LLM's approach — porting their 1.58-bit technique to our 16 MB stack IS the comp-port work. Not world-novel but still a valid port-with-evidence per MOONSHOT_RULES hard rule #2.
+- **Checked by**: claude 2026-04-16
+
+## Status update
+
+Novelty class was WN → reclassified to **CP** (comp-port) based on direct prior-art hit. Still worth running because:
+- No comp PR ships SDQ-LLM's approach
+- SDQ-LLM's paper uses ImageNet-class LLMs, not byte-level 16 MB; our port is the scale-transfer port
+- Expected BPB range unchanged (still [-0.012, -0.002]); the re-spend argument (reclaim + bigger model) is the main lever
 
 ## Lineage
 
