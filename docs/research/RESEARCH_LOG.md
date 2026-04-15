@@ -2902,3 +2902,12 @@ Snapshot Ensembles (Huang 2017) + BMA (Hoeting 1999) exist classically; recent T
 
 0/0%/0.
 
+
+## 2026-04-16T22:44Z — Loop A fire 23: wrote IDEA-023 (sigma-delta quantization, L07 WN)
+
+Classical audio DAC technique (Candy 1985) ported to weight quantization. 4-bit storage with ~7 effective bits via error-feedback. Reclaims 1.5-2 MB compressed. Expected [-0.012, -0.002]. Cost 4h.
+
+Competes with IDEA-005/011/021 for L07 slot — pick the one that reclaims most with least reconstruction loss.
+
+Total IDEAs: 23. Status=draft; audit next fire.
+
