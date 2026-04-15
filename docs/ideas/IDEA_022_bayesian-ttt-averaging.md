@@ -3,7 +3,7 @@ id: IDEA-022
 slug: bayesian-ttt-averaging
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L06
 novelty_class: WN
 expected_bpb: [-0.012, -0.003]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l06-bayesian-model-averaging-over-ttt-snapshots
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype
 ---
 
@@ -78,12 +78,15 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 21 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "Bayesian model averaging test-time training", "SGD snapshot ensemble language model", "weight averaging TTT"
-- **Comp PRs**: grep for `bma`, `bayesian_average`, `snapshot_ensemble` in comp PR titles
-- **Verdict**: TBD; BMA is classical (Hoeting et al. 1999) but applying it over TTT's inner SGD trajectory at byte-LM scale is likely novel
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - "Test-Time Learning for Large Language Models" (2025, arxiv 2505.20633) — dynamic LLM adaptation at test time, doesn't address snapshot ensembling
+  - "When, Where and Why to Average Weights?" (Feb 2025, arxiv 2502.06761) — checkpoint averaging strategies, **training-time trajectory**, not inner TTT SGD snapshots
+  - Classical: Snapshot Ensembles (Huang 2017), BMA (Hoeting 1999) — foundational but not applied to TTT inner steps
+- **Comp PRs** (openai/parameter-golf): **none found** for `snapshot`, `bma`, `bayesian_average`.
+- **Verdict**: **partial-overlap-with-trajectory-ensembles / world-novel-for-byte-LM-TTT**. Applying BMA to TTT's inner SGD trajectory with held-out likelihood weighting at byte-LM scale is not documented. Snapshot Ensembles + BMA exist classically, but the specific combination is novel.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 

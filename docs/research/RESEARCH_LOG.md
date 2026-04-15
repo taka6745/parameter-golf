@@ -2872,3 +2872,8 @@ Total IDEAs: 22. Status=draft; audit next fire.
 
 0/0%/0.
 
+
+## 2026-04-16T22:14Z — Loop A fire 21: IDEA-022 audited → partial-overlap / world-novel-for-byte-LM
+
+Snapshot Ensembles (Huang 2017) + BMA (Hoeting 1999) exist classically; recent TTT papers don't apply BMA to inner SGD trajectory. No comp PR. Novel combo. Promoted draft → audited.
+
