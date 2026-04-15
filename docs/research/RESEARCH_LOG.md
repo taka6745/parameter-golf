@@ -2809,3 +2809,12 @@ Explore subagent: Infini-gram (COLM 2024) uses suffix arrays for longest-match w
 
 0/0%/0.
 
+
+## 2026-04-16T21:15Z — Loop A fire 17: wrote IDEA-021 (tensor-train mixed cores, L07 WN)
+
+TT decomp of weight matrices with per-core Hessian-guided int4/int5 bit allocation. Reclaims 1.5-3 MB of compressed budget; re-spent on +1 layer / wider MLP nets [-0.020, -0.005] BPB. Cost 6h, non-record track first.
+
+Companion to IDEA-005 (mixed int5/int6) but much more aggressive compression via low-rank structure. Important: must test TT-alone and TT+capacity-respend separately.
+
+Total IDEAs: 21. Status=draft; audit next fire.
+
