@@ -3,7 +3,7 @@ id: IDEA-021
 slug: tensor-train-mixed-cores
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L07
 novelty_class: WN
 expected_bpb: [-0.020, -0.005]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l07-tensor-train-decomposition-int4-cores
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype
 ---
 
@@ -75,12 +75,15 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 18 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "tensor train decomposition language model", "TT-rank quantized transformer", "tensor train compression LLM"
-- **Comp PRs**: grep for `tensor_train`, `TT`, `tensor-decomp` in comp PR titles
-- **Verdict**: TBD; TT on NN weights is classical (Novikov 2015) but combining TT + per-core Hessian-guided bit allocation is likely novel
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - **TensorGPT** (2307.00526) — TT-decomposes embedding layer in GPT-scale LLMs, 46-65× compression on embeddings. But uses UNIFORM quantization, NOT per-core Hessian-guided bit allocation.
+  - **Tender** (ISCA 2024, 2406.12930) — post-training TT decomp + runtime requantization co-design. Focus: activation tensor outliers. Does NOT mix int4/int5 per TT core.
+  - **HAWQ-V2** (NeurIPS 2020, 1911.03852) — Hessian-aware mixed-precision at LAYER granularity. Doesn't apply to TT cores.
+- **Comp PRs** (openai/parameter-golf): PRs #1429, #1438 do mixed int5/int6 per-layer Hessian-weighted (standard matrix format, not TT). No TT+per-core mixed-precision found.
+- **Verdict**: **partial-overlap with HAWQ-V2 (Hessian allocation) and TensorGPT (TT decomp) — novel combination**. Core innovation: transferring per-layer Hessian sensitivity down to TT-core granularity, exploiting fine-grained rank structure.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 
