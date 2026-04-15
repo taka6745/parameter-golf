@@ -2578,3 +2578,12 @@ Total IDEAs: 15.
 ### Recommended path
 Option 1 (recreate pod with correct disk config) is the canonical fix per submission/README.md. Cost is one-time 5 min bootstrap + 3-5 min data fetch. All 15 IDEAs can then run cleanly through the rest of the session.
 
+
+## 2026-04-16T17:22Z — Loop A fire 3: prior-art audited IDEA-014 + IDEA-015
+
+Spawned Explore subagent for arxiv + comp-PR prior-art check on both new ideas:
+- **IDEA-014 (arithmetic-coding loss)**: partial-overlap with comp PR #1385 (CAT — compression-aware training for LZ-family compressors). Our AC-specific + compressibility-regularizer combo still novel for our GPTQ+brotli pipeline. Promoted draft → audited.
+- **IDEA-015 (rare-token active sampling)**: **world-novel**. No PR combines rarity-measurement-driven importance sampling with gradient bias correction. Curriculum + importance sampling exist separately in PRs #737/783/764 but not for rare tokens. Promoted draft → audited.
+
+Both frontmatter updated with prior_art_checked=2026-04-16 and full audit sections populated. Next Loop A fires can promote audited → approved after writing falsifiability sections (already present in both).
+

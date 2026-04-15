@@ -3,7 +3,7 @@ id: IDEA-015
 slug: rare-token-active-sampling
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L02
 novelty_class: WN
 expected_bpb: [-0.015, -0.005]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l02-active-learning-difficulty-sampler
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-and-prototype
 ---
 
@@ -84,12 +84,18 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 3 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "rare token active learning language model", "importance sampling language model training", "curriculum rare token"
-- **Comp PRs**: grep for `rarity`, `active_sampling`, `importance`, `curriculum_rare` in comp PR titles
-- **Verdict**: TBD; unlikely that anyone has done this with P7-style per-bucket measurement as the guide
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - "Estimating the Probabilities of Rare Outputs in Language Models" (2024) — rare-token probability estimation via importance sampling, but NOT training-time sampling
+  - "Token-Level Uncertainty-Aware Objective for Language Model Post-Training" (2025) — uncertainty as training signal exists, but not rarity-weighted sampling specifically
+  - "Curriculum Learning for LLM Pretraining" (2024-2025) — curriculum works, but primarily on sequence length/complexity, not rarity
+- **Comp PRs** (openai/parameter-golf):
+  - PR #737 "Online Curriculum Learning" (open) — curriculum implemented, no rarity-specific sampling
+  - PR #783 "Shard-order curriculum" (open) — data ordering, no rare-token weighting
+  - PR #764 "Curriculum Learning + LeakyReLU + N-gram" (closed) — curriculum exists, no importance-weighted rare-token oversampling
+- **Verdict**: **world-novel**. Rarity-informed oversampling + importance-weighted loss correction is a combination nobody has shipped in the comp. Curriculum learning + importance sampling exist separately but have not been combined with rare-token measurement as the driving signal.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 

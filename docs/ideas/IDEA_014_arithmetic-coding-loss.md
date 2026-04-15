@@ -3,7 +3,7 @@ id: IDEA-014
 slug: arithmetic-coding-loss
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L06
 novelty_class: WN
 expected_bpb: [-0.025, -0.010]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l06-arithmetic-coding-loss-train-for-ac-rate-directly
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-and-prototype
 ---
 
@@ -75,12 +75,18 @@ Kill if 2-seed mean val_bpb ≥ 1.080 AND artifact_bytes doesn't change material
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 3 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "arithmetic coding loss neural language model", "MDL training language model", "compression-aware training LM"
-- **Comp PRs**: grep for `ac_rate`, `arithmetic`, `compressibility` in comp PR titles / descriptions
-- **Verdict**: TBD
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - "Language Modeling is Compression" (ICLR 2024) — establishes LM training ≈ AC bits in the limit, but does NOT propose explicit AC loss during training
+  - 2025 papers on neural weight compression + rate-distortion theory — focused on POST-training compression, not training-time objectives
+  - MDL training exists theoretically but lacks a direct neural LM + differentiable AC implementation
+- **Comp PRs** (openai/parameter-golf):
+  - PR #538 "FP8 + Arithmetic Coding + SWA" (open 3/23/26) — uses AC at eval/compression stage, NOT as training loss
+  - PR #459 "Weight Entropy Regularization" (open) — weight entropy regularizer, but via standard reg, not AC proxy
+  - PR #1385 "Compressor-Aware Training (CAT)" (open) — differentiable compression proxies for LZ-family compressors, NOT for AC. **Closest match but targets LZ, not AC.**
+- **Verdict**: **partial-overlap-with-PR-1385** on the broad "compression-aware training" theme, BUT arithmetic-coding-specific loss + compressibility regularizer combination is novel and targets our specific GPTQ→brotli pipeline.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 
