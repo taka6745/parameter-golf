@@ -2592,3 +2592,8 @@ Both frontmatter updated with prior_art_checked=2026-04-16 and full audit sectio
 
 Pod: IDLE (GPU 0%). Disk: 60 GB free (JSONL cleanup held). Shards: 0. No user resolution of the disk-config issue yet. No action — awaiting user decision between [recreate pod / fall back to sp1024 / patch for fewer shards]. Crons still live; Loop A continues doing research-doc work independently. Burning ~$0.35/hr on idle H100 — user may want to decide quickly.
 
+
+## 2026-04-16T17:35Z — Loop B fire 4: still blocked, state unchanged
+
+Pod IDLE; 0 shards; no new logs since 17:01Z fetch_sp8192 error. Burning ~$0.70 idle so far (3 fires × ~12 min × $2.99/hr). No user response yet. No action.
+
