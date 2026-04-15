@@ -3,7 +3,7 @@ id: IDEA-016
 slug: fused-megakernel
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L11
 novelty_class: WN
 expected_bpb: [-0.008, -0.002]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l11-custom-cuda-megakernel-fused-full-block
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype-nonrecord-track
 ---
 
@@ -90,12 +90,17 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 6 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "fused transformer block CUDA megakernel Hopper", "wgmma persistent transformer block", "CUDA kernel fusion attention MLP"
-- **Comp PRs**: grep for `megakernel`, `fused`, `wgmma` in comp PR titles
-- **Verdict**: TBD
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - "Deep Kernel Fusion for Transformers" (Feb 2026, arxiv 2602.11808) — fuses SwiGLU MLP GEMMs + pointwise ops for 13.2% H100 speedup, but attention stays separate; inference-only, not training
+  - "FlashAttention-2 on Hopper via CUTLASS" (2023) — attention fusion only, no full-block fusion
+- **Comp PRs** (openai/parameter-golf):
+  - PR #1450 — Triton TMA **MLP-only** megakernel (fc → relu² fused), +10.5% throughput, 1.08480 BPB record. We already ship this.
+  - PRs #1316, #1192, #1072, #1420, #1561, #1560, #1530 — multiple MLP-only / attention-only megakernels with 3-10% gains
+  - PRs #1502, #1501, #1441 — partial full-block fusion explorations, NOT shipped as records
+- **Verdict**: **partial-overlap-with-PR-#1450+**. MLP-only and attention-only megakernels are production. **Full transformer block fusion** (RMSNorm + QKV + FA3 + output + residual + MLP-norm + MLP fc + activation + MLP proj + residual all in a single persistent Hopper wgmma+TMA kernel) is **not yet shipped**. Novelty lies in the end-to-end fusion scope.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 

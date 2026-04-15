@@ -2639,3 +2639,11 @@ Both status=draft. Next Loop A fires: prior-art audit (decision tree case 2 now 
 
 0/0%/0. Unchanged. ~$1.20 pod idle burn so far.
 
+
+## 2026-04-16T18:24Z — Loop A fire 6: prior-art audited IDEA-016 + IDEA-017
+
+- **IDEA-016 (fused megakernel)**: **partial-overlap-with-PR-#1450+**. Our MLP-only Triton TMA megakernel is shipped. Arxiv 2602.11808 fuses MLP + elementwise on H100 (13%). Full-block fusion (norm + QKV + FA3 + out + residual + MLP all in one persistent Hopper wgmma+TMA kernel) is NOT shipped anywhere. Novelty lies in the end-to-end fusion scope. Promoted draft → audited.
+- **IDEA-017 (MAML TTT init)**: **partial-overlap-with-PR-#384+ and arxiv 2512.23675**. Comp already ships Meta-Learning-TTT at eval time (FOMAML + delta-loss, PRs #384/#296/#494/#1502/#1501); they fix inner-loop rules. Arxiv 2512.23675 meta-learns init for next-token prediction. Inverting this — backprop through K inner SGD steps DURING training so one eval-step ≥ three current Score-First TTT epochs — is novel. Promoted draft → audited.
+
+Both frontmatter updated with prior_art_checked=2026-04-16 and full audit sections. Next Loop A fires can promote to approved.
+

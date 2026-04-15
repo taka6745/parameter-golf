@@ -3,7 +3,7 @@ id: IDEA-017
 slug: maml-ttt-init
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L10
 novelty_class: WN
 expected_bpb: [-0.015, -0.005]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l10-maml-style-meta-learning-for-ttt
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype
 ---
 
@@ -79,12 +79,17 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 6 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "MAML language model", "meta-learning test-time adaptation LM", "MAML TTT transformer"
-- **Comp PRs**: grep for `maml`, `meta-learn`, `meta_learn`, `reptile` in comp PR titles
-- **Verdict**: TBD; expect MAML itself is well-known, but combining with Score-First TTT and byte-LM comp scale is likely novel
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - "MAML-en-LLM" (May 2024, SIGKDD, arxiv 2405.11446) — MAML outer-loop for in-context learning. Does NOT target test-time training; gains on unseen tasks, not val BPB
+  - "Meta-Learning the Difference" (July 2022, arxiv 2207.03509) — MAML-style for efficient LM adaptation via low-rank reparameterization. No direct TTT integration
+  - **"End-to-End Test-Time Training for Long Context"** (Dec 2025, arxiv 2512.23675) — **closest match**. Meta-learns init weights, enables TTT via next-token prediction. But focus is inference-time prediction, not multi-step inner SGD on a support batch
+- **Comp PRs** (openai/parameter-golf):
+  - PRs #384, #296, #494, #1502, #1501 — shipping Meta-Learning-TTT variants (FOMAML, delta-loss, cross-chunk adaptation). Already use meta-learning at test time
+  - **But**: none do outer-loop MAML *during training* to produce a TTT-ready init with fewer eval epochs needed
+- **Verdict**: **partial-overlap-with-PR-#384+ and arxiv 2512.23675**. Using MAML outer-loop *during training* (backprop through K inner SGD steps on a support batch, outer update on query) to collapse the 3-epoch Score-First TTT to 1 epoch is **novel**. Existing comp Meta-TTT fixes the inner-loop rule and adapts at eval; this inverts the flow.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 
