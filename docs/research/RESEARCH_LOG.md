@@ -2877,3 +2877,8 @@ Total IDEAs: 22. Status=draft; audit next fire.
 
 Snapshot Ensembles (Huang 2017) + BMA (Hoeting 1999) exist classically; recent TTT papers don't apply BMA to inner SGD trajectory. No comp PR. Novel combo. Promoted draft → audited.
 
+
+## 2026-04-16T22:15Z — Loop B fire 36: still blocked
+
+0/0%/0.
+
