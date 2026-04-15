@@ -3,7 +3,7 @@ id: IDEA-017
 slug: maml-ttt-init
 created: 2026-04-16
 updated: 2026-04-16
-status: audited
+status: approved
 layer: L10
 novelty_class: WN
 expected_bpb: [-0.015, -0.005]
