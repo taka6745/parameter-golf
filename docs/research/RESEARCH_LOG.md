@@ -2735,3 +2735,8 @@ Total IDEAs: 19. Status=draft, audit next fire.
 
 0/0%/0.
 
+
+## 2026-04-16T20:00Z — Loop A fire 12: IDEA-019 audited → world-novel
+
+Subagent: no arxiv / comp PR combines CTW with modern transformer LM. cmix precedent uses CTW on bytes but no neural mixture. Our LM+CTW scalar-hedge is novel. Promoted draft → audited.
+

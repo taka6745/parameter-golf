@@ -3,7 +3,7 @@ id: IDEA-019
 slug: ctw-standalone
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L09
 novelty_class: WN
 expected_bpb: [-0.030, -0.008]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l09-ctw-context-tree-weighting-online
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype
 ---
 
@@ -79,12 +79,13 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 12 (Explore subagent).
 
-- **Arxiv / classical literature**: CTW (Willems, Shtarkov, Tjalkens 1995) is foundational. Modern neural-LM + CTW mixture: not common in published work
-- **Comp PRs**: grep for `ctw`, `context-tree`, `willems` in comp PR titles
-- **Verdict**: TBD; CTW as an algorithm is well-known but combining it with a modern byte-LM at comp scale + score-first hedge blending is likely novel
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**: no papers combine CTW + modern transformer LM. Closest: CTW for real-valued time series (arxiv 2106.03023) — classical setting, not neural.
+- **Comp PRs** (openai/parameter-golf): **none** — no PR ships CTW.
+- **cmix ecosystem**: cmix (Knoll) uses CTW internally for byte-level compression + blends ~2000 models via LSTM context mixers (Hutter Prize). Proven effective on enwik9 but **operates purely on bytes, no transformer**. Our idea integrates CTW with a modern LM — a distinct step.
+- **Verdict**: **world-novel (with strong precursor in cmix)**. CTW as a standalone eval-time hedge with a transformer LM is unpublished. Mechanism (online CTW on bytes/tokens, scalar-alpha blend, legal causal scoring) is novel. cmix validates CTW's core value but doesn't combine it with a neural LM.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 
