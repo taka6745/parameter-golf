@@ -2725,3 +2725,8 @@ Decouples risk from IDEA-012: if CTW works standalone, IDEA-012 gets a validated
 
 Total IDEAs: 19. Status=draft, audit next fire.
 
+
+## 2026-04-16T19:45Z — Loop B fire 18: still blocked
+
+0/0%/0.
+
