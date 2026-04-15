@@ -2963,3 +2963,8 @@ Total IDEAs: 24. Status=draft; audit next fire. L05 covers contrastive pretraini
 
 0/0%/0.
 
+
+## 2026-04-16T23:44Z — Loop A fire 27: IDEA-024 audited → world-novel
+
+Contrastive learning exists (SimCSE, CLAP, CPO, CPC) but no prior art uses a SHORT warmup phase on byte-level tokens at parameter-constrained LM scale before CE. Promoted draft → audited.
+

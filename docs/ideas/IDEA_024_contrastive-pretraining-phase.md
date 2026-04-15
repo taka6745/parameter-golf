@@ -3,7 +3,7 @@ id: IDEA-024
 slug: contrastive-pretraining-phase
 created: 2026-04-16
 updated: 2026-04-16
-status: draft
+status: audited
 layer: L05
 novelty_class: WN
 expected_bpb: [-0.010, -0.003]
@@ -12,7 +12,7 @@ depends_on: []
 blocks: []
 supersedes: []
 stack_row: STACK_NOVELTY_TRACKER_v2.md#l05-contrastive-pretraining-phase
-prior_art_checked: null
+prior_art_checked: 2026-04-16
 next_step: prior-art-audit-then-prototype
 ---
 
@@ -68,12 +68,16 @@ Kill if:
 
 ## Prior-art audit
 
-_To be filled by next Loop A fire with Explore subagent._
+Audited 2026-04-16 by Loop A fire 27 (Explore subagent).
 
-- **Arxiv (2023-2026)**: search "contrastive pretraining language model", "contrastive init LM", "SimCLR byte-level language model", "InfoNCE pretraining transformer"
-- **Comp PRs**: grep for `contrastive`, `infonce`, `simclr` in comp PR titles
-- **Verdict**: TBD; contrastive pretraining is well-known in NLP (SimCSE, etc.) but at byte-level + short phase + 16 MB artifact scale is likely unexplored
-- **Checked by**: _pending_
+- **Arxiv (2023-2026)**:
+  - "A Statistical Theory of Contrastive Pre-training and Multimodal Generative AI" (Jan 2025, arxiv 2501.04641) — theoretical framework for multi-modal; doesn't address byte-level LMs or short init phases
+  - "Learning Transformer-based World Models with Contrastive Predictive Coding" (Mar 2025, arxiv 2503.04416) — CPC for temporal; no short-pretraining warmup connection
+  - SimCSE (arxiv 2104.08821) — sentence embeddings, not byte-level
+- **Comp PRs** (openai/parameter-golf): **none** found for `contrastive|infonce|simclr|simcse`.
+- **Key gap**: prior work applies contrastive learning to sentences, vision-language, or multi-modal pretraining — NOT byte-level token initialization as a <1-min warmup before CE in sub-10-min training budgets. The contrastive-init→CE transfer at parameter-constrained byte-LM scale appears unexplored.
+- **Verdict**: **world-novel**.
+- **Checked by**: claude 2026-04-16
 
 ## Lineage
 
