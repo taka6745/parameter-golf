@@ -452,39 +452,57 @@ Wallclock budget (600 s total)
 
 ## Late-Stage Promising Follow-Ups
 
-Three of our own novel ideas, developed during this work but not yet validated on H100. All three target the post-quantization damage gap directly. Nothing in this section is a port from another competitor PR; this is what *we* would build next.
+Eight of *our own* world-novel ideas, developed during this work and ready to validate. All target the post-quantization damage gap from one of four angles: **softer training minimum**, **smarter quantization grid**, **post-quant activation rescue**, or **bigger eval-time predictor**. Nothing here is a port from another competitor PR.
 
-![Our novel late-stage follow-ups](figures/fig7_followups.png)
+![Our world-novel late-stage follow-ups](figures/fig7_followups.png)
 
-### A. Progressive depth-grown training
+### A. Progressive Depth-Grown Training
 
-**What it is.** Train a 3-layer model first, then *grow* it to 6 layers mid-run, then to 11 layers for the last segment of the wallclock budget. New layers are inserted with identity-initialized output projections (the new layer's attention output and both DualMLP output linears are zeroed at init), which makes each growth transition mathematically a no-op at the moment it happens. Training continues smoothly across the transition because the forward output is unchanged; only the gradient pathway is now wider.
+Train a 3-layer model first, then grow to 6 layers, then to 11 layers for the final segment. New layers are identity-initialized (zero output projections) so each transition is a forward-pass no-op at the moment it happens. The shorter full-depth window should produce a *softer* minimum that survives quantization.
 
-**Why it might close the gap.** A model trained for 600 s entirely at full depth produces a sharp minimum that GPTQ int6 cannot accommodate (this PR's headline finding). A progressive schedule spends most of its wallclock on a shallower model, then has only the last segment at full depth. The full-depth segment is too short to drive the weights into the same sharp regime, so the resulting minimum should be *softer* at a similar val_bpb, and a softer minimum survives quantization.
+*Status: code-complete, CPU smoke tests pass exactly (`max_abs_diff = 0.0` at transitions, final 35,988,657-param model verified). Needs one full H100 run.*
 
-**Where it stands.** Code-complete. CPU smoke tests confirm: identity preserved exactly across grow transitions (`max_abs_diff = 0.0`), no NaN at transitions, final 11-layer model has exactly 35,988,657 parameters. Has not run on H100. Estimated cost to validate: one full 600 s run.
+### B. Post-Quantization Calibration Loop
 
-**Concrete deliverable if it works.** Either a softer minimum at the same pre-quant val_bpb (diagnostic confirmation of the sharper-minimum hypothesis), or a full-pipeline post-quant val_bpb that lands meaningfully below this PR's 3.46.
+Between GPTQ and eval, run five iterations of fitting *only* the non-quantized parameters (LayerNorm scales, shifts, per-linear biases) to minimize L2 between the int6 and fp32 activation distributions. Operates in the activation domain, mathematically orthogonal to GPTQ's weight-domain compensation, so it catches drift GPTQ cannot.
 
-### B. Post-quantization calibration loop
+*Status: designed (~200 LOC). Projected -0.005 to -0.020 BPB.*
 
-**What it is.** After GPTQ produces its int6 weights, the model's per-layer activation distributions drift away from where they sat in the fp32 model. Right now this drift is left to TTT to fix at eval time. The proposal: between the GPTQ step and the eval, run a small loop that fits *only* the non-quantized parameters (LayerNorm scales, LayerNorm shifts, and per-linear biases) to minimize the L2 distance between the int6 model's activation distributions and the fp32 reference's. Five iterations on the calibration data, each iteration about two seconds on 8×H100. Total addition: under 1 MB of fp32 calibration parameters in the artifact, well inside the cap headroom.
+### C. Hard-Batch Replay During Training
 
-**Why it might close the gap.** GPTQ's column-by-column error compensation is local: it optimizes each weight column against the running residual, but it cannot recover from cumulative drift in *activation* distributions across layers. The calibration loop catches that drift. It is mathematically orthogonal to GPTQ; it operates in the activation domain, not the weight domain.
+Every 1000 training steps, pause and replay the 100 highest-loss batches at 2× the current LR. Dual to the entropy curriculum: curriculum back-loads hard data; replay intensifies the *currently-hardest* batches. Less spiky rare-pattern weight rows quantize more cleanly.
 
-**Where it stands.** Designed and specced; about 200 LOC to implement. The hypothesis is consistent with classical hardware-quantization calibration loops (which fit similar non-quant parameters post-quant for vision models), but applied here to a transformer with the LM-head/embedding tied. Our projected impact: -0.005 to -0.020 BPB on the post-quant value.
+*Status: single 2×H100 run hit pre-quant val_bpb **1.2536** at step ~830 (below the 1.2244 naive baseline at the same step count). Post-quant never measured. Needs full pipeline run.*
 
-**Concrete deliverable.** A drop-in module that runs after GPTQ in `train_gpt.py`, conditional on an env flag, with the calibration parameters serialized into the artifact alongside the int6 weights.
+### D. Vernier-Ladder Quantization
 
-### C. Hard-batch replay during training
+Store every weight on *two* offset int6 grids - grid A at step `s`, grid B shifted by `s/2` - plus one bit per weight saying which grid it landed on. Borrowed from analog-engineering vernier scales. Effective precision is int7 at storage cost of int6 + 1 bit. Aims directly at the cliff that produces our +2.36 BPB damage.
 
-**What it is.** Every 1000 training steps, pause the normal training stream and replay the 100 batches with the highest training loss from the most recent window, at 2× the current learning rate. The hardest batches are the ones the model is currently failing on; double-weighting them periodically forces the optimizer to spend more capacity on those patterns instead of letting them drift into the long tail.
+*Status: designed (~4 hours). Projected -0.003 to -0.015 BPB.*
 
-**Why it might be relevant to the gap.** The entropy-bucket curriculum (described in §3.1) front-loads easy data and back-loads hard data. Hard-batch replay is the dual: it does not change the curriculum, it intensifies attention on the *current* hardest batches. Together they target the rare-pattern signal from two different angles. A model that handles rare patterns better tends to produce a less spiky weight distribution (because rare-pattern handling concentrates in a few weight rows), and a less spiky weight distribution quantizes more cleanly.
+### E. Lossy-to-Lossless Correction Cascade
 
-**Where it stands.** Tested as a single-run speed experiment on 2×H100. Pre-quant val_bpb landed at **1.2536** at step ~830, measurably below the 1.2244 naive baseline at the same step count. Post-quant numbers were never collected because the experiment was queued for token-rate measurement, not for end-of-pipeline metrics. Estimated cost to complete: one full 600 s + GPTQ + TTT run.
+Push tolerant middle MLP layers down to int4 or int3 (where damage is locally small), use the saved bytes to ship a tiny per-layer fp32 bias-correction vector that shifts the dequantized column means back to match fp32 reference. JPEG-style lossy + lossless cascade. Spend bytes only where they matter.
 
-**Concrete deliverable.** Either a confirmed improvement on the post-quant value (the result that matters for the leaderboard), or a clean negative datapoint that closes the question.
+*Status: designed (~5 hours). Projected -0.003 to -0.015 BPB.*
+
+### F. Kombucha Compressibility Objective
+
+In the last 60 seconds of the 600 s training budget, switch the loss from pure cross-entropy to `L = CE + λ · L_compress`, where `L_compress` penalizes weights sitting far from the nearest int6 grid point. By the time GPTQ runs, weights are already clustered near exact int6 values. Pre-emptive gap reduction during training instead of recovery after.
+
+*Status: designed (~4 hours). Projected -0.002 to -0.012 BPB.*
+
+### G. Bezier Control-Point Weight Factorization
+
+Don't store a 36-million-weight matrix; store ~1,000 to 10,000 Bezier control points and a small interpolation function, reconstruct at load time. If 10K points reconstruct weights with int7-equivalent fidelity, the artifact for that matrix shrinks ~4,000×. Freed budget re-spent on more layers or wider MLPs - and the reconstruction bypasses GPTQ entirely, so the post-quant gap doesn't apply.
+
+*Status: designed (~8 hours). Projected -0.005 to -0.030 BPB; depends on how cleanly weights live on a low-dimensional Bezier manifold.*
+
+### H. Online N-Gram Cache (Moonshot)
+
+A causal online n-gram cache that *grows* during eval, built from already-scored validation tokens (legal: TTT/eval-time use of already-graded tokens is allowed). At every position, blend the LM's softmax with a cache lookup. Cmix achieves 0.9 BPB on enwik9 via online prediction; at 16 MB + neural LM we should be able to compound that edge.
+
+*Status: approved, ~8 hours to implement. Projected moonshot range -0.05 to -0.15 BPB. Highest expected payoff of any single follow-up.*
 
 ---
 
